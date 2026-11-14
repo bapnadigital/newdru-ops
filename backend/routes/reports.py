@@ -37,6 +37,10 @@ async def dashboard(request: Request, user: dict = Depends(require_roles(ROLE_OW
         key=lambda x: x["revenue"], reverse=True,
     )[:8]
 
+    refunds_today = await db.sales_returns.find({"created_at": {"$gte": day_start}},
+                                                {"_id": 0, "refund_total": 1}).to_list(5000)
+    refunds_total = round(sum(float(r.get("refund_total", 0)) for r in refunds_today), 2)
+
     new_customers = await db.customers.count_documents({"first_seen": {"$gte": day_start}})
 
     inv = await db.inventory.find({}, {"_id": 0}).to_list(20000)
@@ -64,6 +68,9 @@ async def dashboard(request: Request, user: dict = Depends(require_roles(ROLE_OW
     return {
         "today_sales_total": round(total_sales, 2),
         "today_order_count": order_count,
+        "today_refunds_total": refunds_total,
+        "today_refund_count": len(refunds_today),
+        "today_net_sales": round(total_sales - refunds_total, 2),
         "by_method": {k: round(v, 2) for k, v in by_method.items()},
         "top_skus": top_list,
         "new_customers_today": new_customers,

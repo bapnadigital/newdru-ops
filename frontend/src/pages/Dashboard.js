@@ -30,7 +30,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Kpi icon={<Receipt size={18} />} label="Today's Sales" value={inr(data.today_sales_total)} sub={data.today_order_count + " orders"} />
+        <Kpi icon={<Receipt size={18} />} label="Today's Sales" value={inr(data.today_sales_total)} sub={data.today_order_count + " orders" + (data.today_refunds_total ? ` · ${inr(data.today_refunds_total)} refunded · net ${inr(data.today_net_sales)}` : "")} />
         <Kpi icon={<TrendingUp size={18} />} label="Orders Today" value={data.today_order_count} sub="Store POS + online" />
         <Kpi icon={<Users size={18} />} label="New Customers" value={data.new_customers_today} sub="Captured today" />
         <Kpi icon={<AlertTriangle size={18} />} label="Low Stock" value={data.low_stock_count} sub="SKU x location alerts" accent="warn" />
