@@ -161,8 +161,8 @@ def test_returns_credit_note_restock_and_limits(app):
     seed_product(c, server, "SKU-R", 10)
     store = bearer(c, "store@newdru.com", SEED_PW)
     sale = {"items": [{"product_id": "p-SKU-R", "sku": "SKU-R", "name": "Thing", "quantity": 3,
-                       "unit_price": 118, "gst_rate": 18, "discount": 0}],
-            "payments": [{"method": "cash", "amount": 254}], "cart_discount": 100}
+                       "unit_price": 100, "gst_rate": 18, "discount": 0}],
+            "payments": [{"method": "cash", "amount": 200}], "cart_discount": 100}
     s = c.post("/api/pos/sales", json=sale, headers=store)
     assert s.status_code == 200, s.text
     sid = s.json()["id"]
@@ -171,7 +171,7 @@ def test_returns_credit_note_restock_and_limits(app):
     assert r.status_code == 200, r.text
     cn = r.json()
     assert cn["credit_note_no"].startswith("NW-CN-")
-    assert abs(cn["refund_total"] - 254 * 2 / 3) < 0.05      # bill discount shared fairly
+    assert abs(cn["refund_total"] - 200 * 2 / 3) < 0.05      # bill discount shared fairly
     async def qty():
         return (await server.db.inventory.find_one({"product_id": "p-SKU-R", "location_code": "STORE"}))["quantity"]
     assert c.portal.call(qty) == 9                           # 10 - 3 + 2
@@ -206,3 +206,23 @@ def test_goods_in_retry_does_not_double_stock(app):
     async def qty():
         return (await server.db.inventory.find_one({"product_id": "p-SKU-G", "location_code": "BHIWANDI"}))["quantity"]
     assert c.portal.call(qty) == 7
+
+
+
+def test_price_comes_from_product_list_and_cashier_cannot_discount(app):
+    c, server = app
+    seed_product(c, server, "SKU-P", 5)          # sell_price 100
+    async def add_cashier():
+        from auth import hash_password
+        await server.db.users.insert_one({"id": "cash2", "email": "till@newdru.com", "name": "T", "role": "cashier",
+                                          "active": True, "password_hash": hash_password(SEED_PW)})
+    c.portal.call(add_cashier)
+    cashier = bearer(c, "till@newdru.com", SEED_PW)
+    cheap = _sale("SKU-P", 10, {"method": "cash", "amount": 10})   # tries to bill at Rs 10
+    r = c.post("/api/pos/sales", json=cheap, headers=cashier)
+    assert r.status_code == 400 and "does not match" in r.text     # real price is 100
+    ok = c.post("/api/pos/sales", json=_sale("SKU-P", 10, {"method": "cash", "amount": 100}), headers=cashier)
+    assert ok.status_code == 200 and ok.json()["total"] == 100
+    disc = _sale("SKU-P", 100, {"method": "cash", "amount": 90})
+    disc["cart_discount"] = 10
+    assert c.post("/api/pos/sales", json=disc, headers=cashier).status_code == 403

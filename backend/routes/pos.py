@@ -141,6 +141,26 @@ async def create_sale(body: SaleCreate, request: Request,
         dup = await db.sales.find_one({"client_ref": body.client_ref}, {"_id": 0})
         if dup: return dup
 
+    # Prices come from the product list, never from the browser, so nobody can
+    # bill an item cheaper by editing the request. GST rate and name too.
+    for it in body.items:
+        prod = await db.products.find_one({"id": it.product_id},
+                                          {"_id": 0, "sell_price": 1, "gst_rate": 1, "sku": 1, "name": 1})
+        if not prod:
+            raise HTTPException(400, f"'{it.name}' is not in the product list")
+        if prod.get("sell_price") and float(prod["sell_price"]) > 0:
+            it.unit_price = float(prod["sell_price"])
+        if prod.get("gst_rate") is not None:
+            it.gst_rate = float(prod["gst_rate"])
+        it.sku, it.name = prod.get("sku") or it.sku, prod.get("name") or it.name
+
+    # Only the owner and store manager may give discounts (same rule as the screen).
+    if actor.get("role") not in (ROLE_OWNER, ROLE_STORE_MANAGER):
+        if float(body.cart_discount or 0) > 0 or any(float(i.discount or 0) > 0 for i in body.items):
+            raise HTTPException(403, "Only the owner or store manager can give a discount")
+    if float(body.cart_discount or 0) < 0 or any(float(i.discount or 0) < 0 for i in body.items):
+        raise HTTPException(400, "Discount cannot be negative")
+
     # Reject any line with a zero / negative price — protects against corrupted product data.
     for it in body.items:
         if float(it.unit_price or 0) <= 0:

@@ -45,3 +45,4 @@ Scanners: pip-audit (clean), Bandit (only false positives / low), yarn audit (bu
 | SEC-030 | Medium | Sessions stayed open up to 7 days on shared shop computers | Fixed — 30-min idle sign-out (also on reopen) |
 | SEC-031 | Medium | Data exports were not logged | Fixed — every export recorded in audit log with user and IP |
 | SEC-032 | Medium | Same card payment could be claimed by two simultaneous bills | Fixed — atomic claim |
+| SEC-033 | High | POS trusted the price and discount sent by the browser: a cashier could bill items cheaper or give discounts the screen forbids | Fixed — price/GST from product list; discounts owner/store manager only; tests added |
