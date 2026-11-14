@@ -1,16 +1,38 @@
+# One grouped pull request per area per month, minor/patch only.
+# Security fixes still arrive straight away (GitHub security updates are separate).
+# Major version jumps are skipped here; a developer upgrades those on purpose.
 version: 2
 updates:
   - package-ecosystem: pip
     directory: /backend
-    schedule: { interval: weekly }
-    open-pull-requests-limit: 5
+    schedule: { interval: monthly }
+    open-pull-requests-limit: 2
+    groups:
+      backend: { patterns: ["*"], update-types: ["minor", "patch"] }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: /frontend
-    schedule: { interval: weekly }
-    open-pull-requests-limit: 5
+    schedule: { interval: monthly }
+    open-pull-requests-limit: 2
+    groups:
+      frontend: { patterns: ["*"], update-types: ["minor", "patch"] }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: /
-    schedule: { interval: weekly }
+    schedule: { interval: monthly }
+    open-pull-requests-limit: 1
+    groups:
+      deploy-tools: { patterns: ["*"], update-types: ["minor", "patch"] }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
-    schedule: { interval: weekly }
+    schedule: { interval: monthly }
+    open-pull-requests-limit: 1
+    groups:
+      actions: { patterns: ["*"] }
