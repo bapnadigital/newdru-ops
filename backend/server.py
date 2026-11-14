@@ -141,7 +141,12 @@ async def seed_admin_and_indexes():
     await db.sales.create_index("invoice_no", unique=True)
     await db.sales.create_index("created_at")
     await db.sales.create_index("cashier_id")
-    await db.sales.create_index("client_ref", sparse=True)
+    try:   # one offline-queued bill can only ever be saved once
+        await db.sales.create_index("client_ref", name="client_ref_unique", unique=True,
+                                    partialFilterExpression={"client_ref": {"$type": "string"}})
+    except Exception as e:
+        logger.warning("client_ref unique index not created (%s); keeping plain index", e)
+        await db.sales.create_index("client_ref", sparse=True)
     await db.customers.create_index("phone", sparse=True)
     await db.customers.create_index("email", sparse=True)
     await db.customers.create_index("id", unique=True)

@@ -11,6 +11,7 @@ from models import (
 )
 from auth import get_current_user, require_roles, audit
 from security import rate_limit
+from pymongo.errors import DuplicateKeyError
 from routes.inventory import _apply_delta, _write_movement
 
 router = APIRouter(prefix="/pos", tags=["pos"])
@@ -283,7 +284,15 @@ async def create_sale(body: SaleCreate, request: Request,
         "admin_override": admin_override_info,
         "created_at": now,
     }
-    await db.sales.insert_one(sale)
+    try:
+        await db.sales.insert_one(sale)
+    except DuplicateKeyError:
+        # Same offline bill arrived twice at the same moment: return the saved one.
+        await _release_ptrs(db, used_ptrs)
+        dup = await db.sales.find_one({"client_ref": body.client_ref}, {"_id": 0}) if body.client_ref else None
+        if dup:
+            return dup
+        raise
     if used_ptrs:
         await db.pinelabs_txns.update_many({"ptr_id": {"$in": used_ptrs}},
                                            {"$set": {"sale_id": sale["id"], "invoice_no": invoice_no}})
