@@ -104,15 +104,35 @@ Done: `bapnadigital/newdru-ops` now holds the clean code. The old repo `newdru-m
 
 ### Step 5b — Connect Unicommerce
 
-1. Log in to Uniware → **Settings** → **Users** → **Add user**: name `NEWDRU Ops API`, role **Admin**, give it access to the facilities you want to read. Set a strong password (password manager).
-2. Find the facility codes: Uniware → **Settings** → **Facilities** (the code column).
-3. Decide the mapping. Start with marketplace stock only, for example `AMAZON_FC=<Amazon FBA facility code>,FLIPKART_FC=<Flipkart facility code>`. Only mapped locations are overwritten; Store and Bhiwandi stay managed in the app unless you add them.
-4. Add the five `UNICOMMERCE_*` secrets and `CRON_SECRET` in Cloudflare (table above), then redeploy.
-5. In the app: **Admin → Integrations → Unicommerce → Sync stock now**. Check a few SKUs against Uniware. After that it runs by itself (stock every 30 minutes, orders every hour).
+What we found in your Unicommerce (15 Nov 2026): one warehouse (`bapnadigital`, Khopat, Thane), channels Amazon Easy Ship, Flipkart, Shopify and Custom, 33 products — and **zero stock on every product** while 400+ units of orders wait (e.g. 165 GlowSkin masks, 48 sofa vacuums, 46 eye massagers). So the job is to **send the app's real stock into Unicommerce**, not the other way round.
 
-The connection is **read-only**: the app never changes anything in Unicommerce.
+1. Uniware → **Settings → Users → Add user**: name `NEWDRU Ops API`, role **Admin**, facility `bapnadigital`. Set the password yourself (password manager).
+2. Confirm the SKU matching sheet (`NEWDRU_Unicommerce_SKU_Mapping_DRAFT.csv`): fill the rows marked `check`/`missing`, fix the codes Uniware cut off on screen, then upload it in **Integrations → Unicommerce → Upload SKU mapping**.
+3. Cloudflare secrets: `UNICOMMERCE_MODE=live`, `UNICOMMERCE_TENANT=bapnadigital`, `UNICOMMERCE_USER`, `UNICOMMERCE_PASSWORD`, `UNICOMMERCE_PUSH_LOCATION=BHIWANDI` (or whichever app location holds the stock that the Thane warehouse ships), `UNICOMMERCE_PUSH_FACILITY=bapnadigital`, `UNICOMMERCE_SHELF` (your Uniware shelf code, ask your warehouse team; default `DEFAULT`), `CRON_SECRET`. Leave `UNICOMMERCE_PUSH_ENABLED` unset for now.
+4. In the app: **Integrations → Unicommerce → Preview**. It lists every SKU with app stock, Unicommerce now and what it will set. Nothing is sent.
+5. When the preview looks right: add `UNICOMMERCE_PUSH_ENABLED=true`, then press **Send N changes**. Unicommerce then pushes those quantities to Amazon, Flipkart and Shopify — so do a stock count first (Step 5d).
+6. Optional, once you trust it: `UNICOMMERCE_AUTO_PUSH=true` sends stock every 30 minutes automatically. Marketplace orders are pulled hourly either way.
 
-### Step 6 — Staff-only gate (Cloudflare Access)
+### Step 5c — Pine Labs machine in the store
+
+The app already talks to Pine Labs' **Plutus Cloud** service: the cashier presses **Card** or **UPI** in the app, the amount appears on the Pine Labs machine, the customer pays, and the app automatically creates the GST bill and reduces store stock.
+
+1. Call your Pine Labs relationship manager (or support) and ask to **enable "Plutus Cloud Based Integration (CBI)" on your store terminal for a billing software**. Ask them for: **Merchant ID, Security Token, Store ID, Client ID / IMEI of the terminal, and the UAT test details**. Also give them the callback URL: `https://mynewdru.in/api/pinelabs/webhook?token=<your PINELABS_WEBHOOK_SECRET>`.
+2. In the app: **Admin → Integrations → Pine Labs terminal** → type the details they gave you → mode **UAT** → Save.
+3. Cloudflare secrets: `PINELABS_MODE=uat` and `PINELABS_WEBHOOK_SECRET` (a long random password). Redeploy.
+4. Test with Pine Labs on the line: POS → add any product → **Card** → the machine should show the amount → pay → bill prints. Then refund it on the machine.
+5. Ask Pine Labs to move you to production, change `PINELABS_MODE=production`, redeploy, do one real ₹1 sale and refund.
+
+Once the machine is live, the app **refuses** a card/UPI bill unless the money really came through the machine (each machine payment can be used on one bill only). Cash bills work as before.
+
+### Step 5d — Store stock that staff keep right
+
+- **Every sale** reduces Store stock automatically. **Goods In** adds stock; **Transfers** move stock between Bhiwandi and the Store.
+- **Stock Count** (new menu item): staff scan or type what is physically on the shelf. They do **not** see the system number, so they can't just copy it. Differences are saved as "count" entries in the Stock Ledger with the person's name.
+- You see each count's missing / extra units on the same page. Suggested routine: full store count every Sunday night, and a quick count of the top 10 products every evening.
+- Before the first push to Unicommerce, do a full count of Bhiwandi too, so marketplaces get real numbers.
+
+### Step 6 — Staff-only gate (Cloudflare Access)### Step 6 — Staff-only gate (Cloudflare Access)
 
 1. Cloudflare → **Zero Trust** (free plan) → **Access** → **Applications** → **Add an application** → **Self-hosted**.
 2. Name `NEWDRU Ops staff`, domain `mynewdru.in`, path empty (whole site). Session duration **1 month**.

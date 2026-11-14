@@ -13,6 +13,34 @@ export default function Integrations() {
   const [fcLoc, setFCLoc] = useState("AMAZON_FC");
   const [uploading, setUploading] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [plan, setPlan] = useState(null);
+  const [mapFile, setMapFile] = useState(null);
+
+  const previewPush = async () => {
+    setSyncing(true);
+    try { setPlan((await api.get("/fc-sync/push/preview")).data); }
+    catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
+    setSyncing(false);
+  };
+  const confirmPush = async () => {
+    if (!window.confirm(`Send stock for ${plan.changes} SKUs to Unicommerce? Unicommerce will then update Amazon, Flipkart and Shopify stock.`)) return;
+    setSyncing(true);
+    try {
+      const { data } = await api.post("/fc-sync/push", { confirm: true });
+      toast.success(`Sent ${data.sent} · ${data.ok} OK · ${data.failed.length} failed`);
+      setPlan(null); load();
+    } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
+    setSyncing(false);
+  };
+  const uploadMapping = async () => {
+    if (!mapFile) return toast.error("Pick the SKU mapping CSV first");
+    const fd = new FormData(); fd.append("file", mapFile);
+    try {
+      const { data } = await api.post("/fc-sync/mapping/import", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      toast.success(`Linked ${data.updated_products} products · ${data.unknown_app_skus.length} unknown`);
+      setMapFile(null);
+    } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
+  };
 
   const syncNow = async (what) => {
     setSyncing(true);
@@ -77,6 +105,33 @@ export default function Integrations() {
               <div className="flex gap-2">
                 <button data-testid="uc-sync-stock" onClick={() => syncNow("stock")} disabled={syncing} className="btn-brand disabled:opacity-50">Sync stock now</button>
                 <button data-testid="uc-sync-orders" onClick={() => syncNow("orders")} disabled={syncing} className="border border-slate-300 rounded-md px-3 py-2 text-sm disabled:opacity-50">Sync orders (24h)</button>
+              </div>
+              <div className="border-t border-slate-200 pt-3">
+                <div className="text-sm font-semibold mb-1">Send app stock to Unicommerce</div>
+                <div className="text-xs text-slate-500 mb-2">
+                  {fc.push?.location ? `${fc.push.location} → ${fc.push.facility} (shelf ${fc.push.shelf})` : "Not set up (UNICOMMERCE_PUSH_LOCATION / FACILITY)"}
+                  {fc.push?.location && !fc.push?.enabled && " · preview only (sending is switched off)"}
+                </div>
+                <div className="flex flex-wrap gap-2 items-center">
+                  <button data-testid="uc-push-preview" onClick={previewPush} disabled={syncing} className="border border-slate-300 rounded-md px-3 py-2 text-sm disabled:opacity-50">Preview</button>
+                  {plan && plan.push_enabled && plan.changes > 0 && (
+                    <button data-testid="uc-push-confirm" onClick={confirmPush} disabled={syncing} className="btn-brand disabled:opacity-50">Send {plan.changes} changes</button>
+                  )}
+                  <input type="file" accept=".csv" onChange={(e) => setMapFile(e.target.files?.[0] || null)} className="text-xs" />
+                  <button onClick={uploadMapping} disabled={!mapFile} className="border border-slate-300 rounded-md px-3 py-2 text-sm disabled:opacity-50">Upload SKU mapping</button>
+                </div>
+                {plan && (
+                  <div className="mt-2 max-h-64 overflow-auto text-xs">
+                    <table className="w-full">
+                      <thead><tr className="text-left text-slate-500"><th>Unicommerce SKU</th><th>App stock</th><th>Unicommerce now</th><th>Will set to</th></tr></thead>
+                      <tbody>{plan.lines.map((l) => (
+                        <tr key={l.unicommerce_sku} className={l.change ? "font-semibold" : "text-slate-400"}>
+                          <td className="font-mono">{l.unicommerce_sku}</td><td>{l.app_stock}</td><td>{l.unicommerce_now}</td><td>{l.will_set_to}</td>
+                        </tr>))}</tbody>
+                    </table>
+                    {plan.skipped.length > 0 && <div className="text-amber-700 mt-2">Skipped {plan.skipped.length}: {plan.skipped.map((x) => x.product_sku).join(", ")}</div>}
+                  </div>
+                )}
               </div>
             </div>
           )}

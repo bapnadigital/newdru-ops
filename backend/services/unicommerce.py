@@ -11,8 +11,16 @@ Settings (Cloudflare secrets / backend .env — never in code):
                             e.g. "AMAZON_FC=AMZFBA01,FLIPKART_FC=FKSMART01"
                             Only mapped locations are ever overwritten by the sync.
 
-This client only reads (OAuth token, inventory snapshot, sale order search/get).
-It never changes anything in Unicommerce.
+Reads: OAuth token, inventory snapshot, sale order search/get.
+Writes: only replace_inventory(), and only when the owner runs a stock push
+(UNICOMMERCE_PUSH_ENABLED=true, after a preview). Nothing else is ever changed.
+
+Push settings:
+    UNICOMMERCE_PUSH_LOCATION   app location whose stock is sent (e.g. BHIWANDI)
+    UNICOMMERCE_PUSH_FACILITY   Uniware facility that receives it (e.g. bapnadigital)
+    UNICOMMERCE_SHELF           Uniware shelf code to put stock on (default DEFAULT)
+    UNICOMMERCE_PUSH_ENABLED    true to allow real pushes (previews always allowed)
+    UNICOMMERCE_AUTO_PUSH       true to push automatically on the schedule
 """
 from __future__ import annotations
 
@@ -49,6 +57,16 @@ def facility_map() -> Dict[str, str]:
             if loc.strip() and fac.strip():
                 out[loc.strip().upper()] = fac.strip()
     return out
+
+
+def push_settings() -> Dict[str, object]:
+    return {
+        "location": (os.environ.get("UNICOMMERCE_PUSH_LOCATION") or "").upper() or None,
+        "facility": os.environ.get("UNICOMMERCE_PUSH_FACILITY") or None,
+        "shelf": os.environ.get("UNICOMMERCE_SHELF") or "DEFAULT",
+        "enabled": (os.environ.get("UNICOMMERCE_PUSH_ENABLED") or "false").lower() == "true",
+        "auto": (os.environ.get("UNICOMMERCE_AUTO_PUSH") or "false").lower() == "true",
+    }
 
 
 def configured() -> bool:
@@ -142,6 +160,25 @@ class UnicommerceClient:
                                     {"itemTypeSKUs": skus[i:i + SNAPSHOT_MAX_SKUS]}, facility=facility)
             out.extend(data.get("inventorySnapshots") or [])
         return out
+
+    async def replace_inventory(self, facility: str, items: List[dict], shelf_code: str,
+                                remarks: str = "NEWDRU Ops stock sync") -> List[dict]:
+        """Set GOOD_INVENTORY to an absolute quantity per SKU (adjustmentType REPLACE).
+        items: [{"sku": "...", "quantity": 12}]. Returns per-item results."""
+        results: List[dict] = []
+        for i in range(0, len(items), 200):
+            chunk = items[i:i + 200]
+            body = {"inventoryAdjustments": [{
+                "itemSKU": it["sku"], "quantity": int(it["quantity"]), "shelfCode": shelf_code,
+                "inventoryType": "GOOD_INVENTORY", "adjustmentType": "REPLACE",
+                "facilityCode": facility, "remarks": remarks[:255],
+            } for it in chunk]}
+            data = await self._post("/services/rest/v1/inventory/adjust/bulk", body, facility=facility)
+            for it, r in zip(chunk, data.get("inventoryAdjustmentResponses") or []):
+                errs = "; ".join((e.get("description") or e.get("message") or "") for e in r.get("errors") or [])
+                results.append({"sku": it["sku"], "quantity": it["quantity"],
+                                "ok": bool(r.get("successful")), "error": errs or None})
+        return results
 
     # ---------- orders ----------
     async def search_orders(self, *, updated_since_minutes: Optional[int] = None,

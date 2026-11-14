@@ -206,6 +206,12 @@ class SaleLine(BaseModel):
 class PaymentPart(BaseModel):
     method: Literal["cash", "card", "upi"] = "cash"
     amount: float
+    # Pine Labs terminal reference (required for card/UPI when the terminal is live)
+    ptr_id: Optional[str] = Field(default=None, max_length=64)
+    rrn: Optional[str] = Field(default=None, max_length=64)
+    approval_code: Optional[str] = Field(default=None, max_length=32)
+    masked_pan: Optional[str] = Field(default=None, max_length=32)
+    acquirer: Optional[str] = Field(default=None, max_length=64)
 
 
 class SaleCreate(BaseModel):

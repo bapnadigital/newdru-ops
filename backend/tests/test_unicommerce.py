@@ -121,3 +121,67 @@ def test_cron_endpoint_needs_secret(monkeypatch):
         assert c.post("/api/internal/cron", headers={"X-Cron-Token": "wrong"}).status_code == 401
         r = c.post("/api/internal/cron", headers={"X-Cron-Token": "cron-test-secret-value"})
         assert r.status_code == 200 and r.json()["unicommerce"]["skipped"]
+
+
+def fake_uniware_push(calls, current):
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        if request.url.path == "/oauth/token":
+            return httpx.Response(200, json={"access_token": "tok-1", "expires_in": 3600})
+        if request.url.path.endswith("/inventorySnapshot/get"):
+            body = json.loads(request.content)
+            return httpx.Response(200, json={"successful": True, "inventorySnapshots": [
+                {"itemTypeSKU": s, "inventory": current[s]} for s in body["itemTypeSKUs"] if s in current]})
+        if request.url.path.endswith("/inventory/adjust/bulk"):
+            body = json.loads(request.content)
+            return httpx.Response(200, json={"successful": True, "inventoryAdjustmentResponses": [
+                {"successful": True, "errors": []} for _ in body["inventoryAdjustments"]]})
+        return httpx.Response(404)
+    return httpx.MockTransport(handler)
+
+
+def test_push_preview_and_push(monkeypatch, env):
+    from mongomock_motor import AsyncMongoMockClient
+    from services import unicommerce as uc
+    from services import unicommerce_sync as ucs
+    monkeypatch.setenv("UNICOMMERCE_FACILITIES", "")
+    monkeypatch.setenv("UNICOMMERCE_PUSH_LOCATION", "BHIWANDI")
+    monkeypatch.setenv("UNICOMMERCE_PUSH_FACILITY", "bapnadigital")
+    db = AsyncMongoMockClient()["uc_push"]
+    current = {"SHUMASK_GlowSkinPro": 0, "SHUMASK_GlowSkinPro-4": 0,
+               "SHUFA-Gold": 0, "SHUFA-White": 0}
+
+    async def go():
+        await db.products.insert_many([
+            {"id": "m", "sku": "SHUMASK-COLLAGEN", "unicommerce_skus": [
+                {"sku": "SHUMASK_GlowSkinPro", "units": 1}, {"sku": "SHUMASK_GlowSkinPro-4", "units": 4}]},
+            {"id": "f", "sku": "SHUFA-VACUUM", "unicommerce_skus": [
+                {"sku": "SHUFA-Gold", "units": 1}, {"sku": "SHUFA-White", "units": 1}]},
+        ])
+        await db.inventory.insert_many([
+            {"product_id": "m", "location_code": "BHIWANDI", "quantity": 10},
+            {"product_id": "f", "location_code": "BHIWANDI", "quantity": 5}])
+        calls = []
+        client = uc.UnicommerceClient.from_env(transport=fake_uniware_push(calls, current))
+        plan = await ucs.push_plan(db, client)
+        writes_before = [c for c in calls if c.url.path.endswith("/adjust/bulk")]
+        blocked = None
+        try:
+            await ucs.push_inventory(db, client)
+        except uc.UnicommerceError as e:
+            blocked = str(e)
+        monkeypatch.setenv("UNICOMMERCE_PUSH_ENABLED", "true")
+        res = await ucs.push_inventory(db, client)
+        sent = [json.loads(c.content) for c in calls if c.url.path.endswith("/adjust/bulk")]
+        return plan, writes_before, blocked, res, sent
+
+    plan, writes_before, blocked, res, sent = run(go())
+    targets = {l["unicommerce_sku"]: l["will_set_to"] for l in plan["lines"]}
+    assert targets == {"SHUMASK_GlowSkinPro": 10, "SHUMASK_GlowSkinPro-4": 2}
+    assert plan["skipped"][0]["product_sku"] == "SHUFA-VACUUM"   # colours can't be split
+    assert writes_before == []                                     # preview never writes
+    assert "switched off" in blocked                               # push needs explicit enable
+    assert res["sent"] == 2 and res["ok"] == 2
+    adj = sent[0]["inventoryAdjustments"]
+    assert {a["adjustmentType"] for a in adj} == {"REPLACE"}
+    assert all(a["facilityCode"] == "bapnadigital" for a in adj)

@@ -312,3 +312,22 @@ Your role likely doesn't have it. Ask the owner to check **Users → Role**.
 ---
 
 _Newdru — Retail + wholesale, run from one clean dashboard._
+
+
+## 14. Stock Count (store and warehouse staff)
+
+1. Open **Stock Count** in the menu.
+2. Scan each item's barcode (each scan adds 1), or type the number next to the product.
+3. Leave a product empty if you didn't count it — it won't be changed.
+4. Add a note (e.g. "Sunday count") and press **Save count**.
+
+You won't see the system quantity; that is on purpose. The owner sees the differences.
+
+## 15. Card / UPI on the Pine Labs machine
+
+1. Build the bill as usual.
+2. Press **Card** or **UPI** in the Pine Labs panel. The amount appears on the machine.
+3. Customer pays on the machine. When it is approved the bill completes and prints by itself.
+4. If the customer cancels, press **Cancel** in the panel.
+
+Never type a card/UPI payment by hand — the app will refuse it once the machine is live.

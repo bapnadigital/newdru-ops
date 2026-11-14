@@ -11,6 +11,7 @@ import os
 from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Request, UploadFile, File, Form, HTTPException, Depends
+from pydantic import BaseModel
 
 from models import (
     gen_id, now_iso, LOC_AMAZON_FC, LOC_FLIPKART_FC,
@@ -45,6 +46,7 @@ async def config(request: Request, user: dict = Depends(require_roles(ROLE_OWNER
         "api_user_set": bool(_cred("UNICOMMERCE_USER")),
         "password_set": bool(_cred("UNICOMMERCE_PASSWORD")),
         "facilities": uc.facility_map(),
+        "push": uc.push_settings(),
         "inventory_every_minutes": ucs.INVENTORY_EVERY_MIN,
         "orders_every_minutes": ucs.ORDERS_EVERY_MIN,
         "supported_locations": sorted(VALID_FC_CODES),
@@ -178,6 +180,80 @@ async def orders_summary(request: Request, days: int = 7,
         out.setdefault(ch, {}).setdefault(st, 0)
         out[ch][st] += 1
     return {"days": days, "by_channel": out, "total": sum(sum(v.values()) for v in out.values())}
+
+
+@router.get("/mapping")
+async def get_mapping(request: Request, actor: dict = Depends(require_roles(ROLE_OWNER, ROLE_WH_MANAGER))):
+    """Current app SKU -> Unicommerce SKU links."""
+    db = request.app.state.db
+    rows = await db.products.find({"unicommerce_skus.0": {"$exists": True}},
+                                  {"_id": 0, "sku": 1, "name": 1, "unicommerce_skus": 1}).to_list(5000)
+    return {"mapped_products": len(rows), "rows": rows}
+
+
+@router.post("/mapping/import")
+async def import_mapping(request: Request, file: UploadFile = File(...), replace: bool = Form(True),
+                         actor: dict = Depends(require_roles(ROLE_OWNER))):
+    """CSV columns: app_sku, unicommerce_sku, units (units optional, default 1).
+    Rows with an empty unicommerce_sku are ignored. replace=true resets each
+    listed product's links to exactly what the file says."""
+    db = request.app.state.db
+    raw = (await file.read()).decode("utf-8-sig", errors="ignore")
+    reader = csv.DictReader(io.StringIO(raw))
+    cols = {c.lower().strip(): c for c in (reader.fieldnames or [])}
+    if "app_sku" not in cols or "unicommerce_sku" not in cols:
+        raise HTTPException(400, "CSV needs columns app_sku and unicommerce_sku (and optional units)")
+    links: dict = {}
+    for row in reader:
+        a = (row.get(cols["app_sku"]) or "").strip()
+        u = (row.get(cols["unicommerce_sku"]) or "").strip()
+        if not a or not u:
+            continue
+        try:
+            units = max(1, int(float(row.get(cols.get("units", ""), "") or 1)))
+        except ValueError:
+            units = 1
+        links.setdefault(a, []).append({"sku": u, "units": units})
+    updated, unknown = 0, []
+    for a, maps in links.items():
+        p = await db.products.find_one({"sku": a}, {"_id": 0, "id": 1, "unicommerce_skus": 1})
+        if not p:
+            unknown.append(a); continue
+        new = maps if replace else (p.get("unicommerce_skus") or []) + maps
+        await db.products.update_one({"id": p["id"]}, {"$set": {"unicommerce_skus": new, "updated_at": now_iso()}})
+        updated += 1
+    await audit(db, actor, "fc_sync.mapping_import", "product", None, {"updated": updated, "unknown": len(unknown)})
+    return {"updated_products": updated, "unknown_app_skus": unknown}
+
+
+@router.get("/push/preview")
+async def push_preview(request: Request, actor: dict = Depends(require_roles(ROLE_OWNER))):
+    """Shows exactly what a stock push would change in Unicommerce. Changes nothing."""
+    client = _live_client()
+    try:
+        return await ucs.push_plan(request.app.state.db, client)
+    except uc.UnicommerceError as e:
+        raise HTTPException(502, str(e))
+
+
+class PushConfirm(BaseModel):
+    confirm: bool = False
+
+
+@router.post("/push")
+async def push_now(body: PushConfirm, request: Request, actor: dict = Depends(require_roles(ROLE_OWNER))):
+    """Send app stock to Unicommerce (REPLACE). Owner only, needs confirm=true and
+    UNICOMMERCE_PUSH_ENABLED=true. Unicommerce then updates marketplace listings."""
+    if not body.confirm:
+        raise HTTPException(400, "Open the preview first, then send confirm=true.")
+    client = _live_client()
+    try:
+        result = await ucs.push_inventory(request.app.state.db, client, actor)
+    except uc.UnicommerceError as e:
+        raise HTTPException(502, str(e))
+    await audit(request.app.state.db, actor, "fc_sync.unicommerce_push", "fc_sync", None,
+                {"sent": result["sent"], "ok": result["ok"], "failed": len(result["failed"])})
+    return result
 
 
 @router.get("/runs")

@@ -199,6 +199,30 @@ async def create_sale(body: SaleCreate, request: Request,
         calc["total"], now,
     )
 
+    # Card/UPI must come from an APPROVED Pine Labs terminal transaction when the
+    # terminal is live, so nobody can record a card payment that never happened.
+    from services.pinelabs import _mode as _pl_mode
+    pl_live = _pl_mode() in ("uat", "production")
+    used_ptrs = []
+    for p in body.payments:
+        if p.method not in ("card", "upi") or p.amount <= 0:
+            continue
+        if not p.ptr_id:
+            if pl_live:
+                raise HTTPException(400, f"{p.method.upper()} payment must be taken on the Pine Labs terminal from this screen.")
+            continue
+        txn = await db.pinelabs_txns.find_one({"ptr_id": str(p.ptr_id)}, {"_id": 0})
+        if not txn or txn.get("status") != "APPROVED":
+            raise HTTPException(400, "Terminal payment is not approved yet.")
+        if txn.get("sale_id"):
+            raise HTTPException(400, "This terminal payment is already attached to another bill.")
+        txn_amount = (txn["amount_paise"] / 100.0) if txn.get("amount_paise") is not None else float(txn.get("amount") or 0)
+        if abs(txn_amount - float(p.amount)) > 0.05:
+            raise HTTPException(400, "Terminal amount does not match the payment amount.")
+        p.rrn, p.approval_code = txn.get("rrn"), txn.get("approval_code")
+        p.masked_pan, p.acquirer = txn.get("masked_pan"), txn.get("acquirer")
+        used_ptrs.append(str(p.ptr_id))
+
     payment_summary = body.payments[0].method if len(body.payments) == 1 else "split"
 
     sale = {
@@ -226,6 +250,9 @@ async def create_sale(body: SaleCreate, request: Request,
         "created_at": now,
     }
     await db.sales.insert_one(sale)
+    if used_ptrs:
+        await db.pinelabs_txns.update_many({"ptr_id": {"$in": used_ptrs}},
+                                           {"$set": {"sale_id": sale["id"], "invoice_no": invoice_no}})
 
     if admin_override_info:
         await audit(db, actor, "sale.below_cogs_override", "sale", sale["id"], {

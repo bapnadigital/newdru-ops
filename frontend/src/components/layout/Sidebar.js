@@ -2,7 +2,7 @@ import { NavLink } from "react-router-dom";
 import {
   LayoutDashboard, Package, Boxes, ScanBarcode, ArrowLeftRight,
   ShoppingCart, Users, LineChart, UserCog, ClipboardList, LogOut, Plug,
-  Container, Wallet, ShieldCheck, Activity, LifeBuoy, Settings2, BookOpen,
+  Container, Wallet, ShieldCheck, Activity, LifeBuoy, Settings2, BookOpen, ListChecks,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import NewdruLogo from "@/components/NewdruLogo";
@@ -25,6 +25,7 @@ const NAV = [
   { to: "/products", label: "Products", icon: Package, roles: [...OWNER, ...WAREHOUSE], section: "Warehouse" },
   { to: "/inventory", label: "Inventory", icon: Boxes, roles: [...OWNER, ...STORE, ...WAREHOUSE], section: "Warehouse" },
   { to: "/receive", label: "Goods In / Out", icon: ScanBarcode, roles: [...OWNER, ...STORE, ...WAREHOUSE], section: "Warehouse" },
+  { to: "/stock-count", label: "Stock Count", icon: ListChecks, roles: [...OWNER, ...STORE, ...WAREHOUSE], section: "Warehouse" },
   { to: "/transfers", label: "Transfers", icon: ArrowLeftRight, roles: [...OWNER, ...WAREHOUSE], section: "Warehouse" },
   { to: "/box-fit", label: "Box-Fit Planner", icon: Container, roles: [...OWNER, ...WAREHOUSE], section: "Warehouse" },
   { to: "/movements", label: "Stock Ledger", icon: ClipboardList, roles: [...OWNER, ...WH_MANAGER_ONLY], section: "Warehouse" },

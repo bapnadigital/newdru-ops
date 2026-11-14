@@ -215,3 +215,95 @@ async def set_threshold(body: LowStockThresholdSet, request: Request,
     await audit(db, actor, "inventory.threshold", "inventory", body.product_id,
                 {"location": body.location_code, "threshold": body.low_stock_threshold})
     return {"ok": True}
+
+
+# ================= Stock count (physical count by staff) =================
+from pydantic import BaseModel as _BM, Field as _F
+
+
+class CountLine(_BM):
+    sku: str = _F(max_length=120)
+    counted: int = _F(ge=0, le=1_000_000)
+
+
+class StockCountIn(_BM):
+    location_code: str
+    lines: list[CountLine] = _F(min_length=1, max_length=2000)
+    note: str | None = _F(default=None, max_length=500)
+
+
+_COUNT_ROLES = {
+    LOC_STORE: {ROLE_OWNER, ROLE_STORE_MANAGER, "cashier"},
+    LOC_BHIWANDI: {ROLE_OWNER, ROLE_WH_MANAGER, "warehouse_staff"},
+}
+
+
+@router.get("/count-sheet")
+async def count_sheet(request: Request, location_code: str,
+                      actor: dict = Depends(get_current_user)):
+    """Products to count at a location. Blind: staff don't see the system quantity."""
+    if actor["role"] not in _COUNT_ROLES.get(location_code, set()):
+        raise HTTPException(403, "You can't count stock at this location")
+    db = request.app.state.db
+    prods = await db.products.find({"active": {"$ne": False}},
+                                   {"_id": 0, "id": 1, "sku": 1, "name": 1, "barcode": 1}).sort("name", 1).to_list(5000)
+    return {"location_code": location_code, "products": prods}
+
+
+@router.post("/count")
+async def submit_count(body: StockCountIn, request: Request,
+                       actor: dict = Depends(get_current_user)):
+    """Save a physical count. Every difference becomes a 'count' movement, so the
+    ledger shows who counted what and how much stock was missing or extra."""
+    if actor["role"] not in _COUNT_ROLES.get(body.location_code, set()):
+        raise HTTPException(403, "You can't count stock at this location")
+    db = request.app.state.db
+    now = now_iso()
+    lines_out, unknown = [], []
+    for ln in body.lines:
+        product = await db.products.find_one({"$or": [{"sku": ln.sku}, {"barcode": ln.sku}]}, {"_id": 0})
+        if not product:
+            unknown.append(ln.sku); continue
+        inv = await db.inventory.find_one({"product_id": product["id"], "location_code": body.location_code},
+                                          {"_id": 0, "quantity": 1})
+        system = int((inv or {}).get("quantity") or 0)
+        delta = int(ln.counted) - system
+        if delta:
+            await _apply_delta(db, product["id"], body.location_code, delta)
+            await _write_movement(db, actor, product, body.location_code, delta, "count",
+                                  reason=f"Stock count{': ' + body.note if body.note else ''}")
+        lines_out.append({"sku": product["sku"], "name": product["name"], "system": system,
+                          "counted": int(ln.counted), "difference": delta})
+    doc = {
+        "id": gen_id(), "location_code": body.location_code, "note": body.note,
+        "counted_by": actor.get("name"), "counted_by_id": actor["id"], "created_at": now,
+        "lines": lines_out, "unknown_skus": unknown,
+        "items_counted": len(lines_out),
+        "items_with_difference": sum(1 for l in lines_out if l["difference"]),
+        "units_missing": -sum(l["difference"] for l in lines_out if l["difference"] < 0),
+        "units_extra": sum(l["difference"] for l in lines_out if l["difference"] > 0),
+    }
+    await db.stock_counts.insert_one(dict(doc))
+    await audit(db, actor, "inventory.count", "stock_count", doc["id"],
+                {"location": body.location_code, "differences": doc["items_with_difference"]})
+    # Staff only learn how many lines differed; the owner sees the details.
+    if actor["role"] == ROLE_OWNER:
+        return doc
+    return {"id": doc["id"], "items_counted": doc["items_counted"],
+            "items_with_difference": doc["items_with_difference"], "unknown_skus": unknown}
+
+
+@router.get("/counts")
+async def list_counts(request: Request, location_code: str | None = None, limit: int = 30,
+                      actor: dict = Depends(require_roles(ROLE_OWNER, ROLE_STORE_MANAGER, ROLE_WH_MANAGER))):
+    db = request.app.state.db
+    q = {"location_code": location_code} if location_code else {}
+    if actor["role"] == ROLE_STORE_MANAGER:
+        q["location_code"] = LOC_STORE
+    if actor["role"] == ROLE_WH_MANAGER:
+        q["location_code"] = LOC_BHIWANDI
+    rows = await db.stock_counts.find(q, {"_id": 0}).sort("created_at", -1).limit(max(1, min(int(limit), 200))).to_list(200)
+    if actor["role"] != ROLE_OWNER:
+        for r in rows:  # managers see who counted and how many differences, not costs
+            r.pop("lines", None)
+    return rows
