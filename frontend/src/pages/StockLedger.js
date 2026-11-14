@@ -36,6 +36,10 @@ export default function StockLedger() {
           <option value="transfer_out">Transfer out</option>
           <option value="transfer_in">Transfer in</option>
           <option value="adjustment">Adjustment</option>
+          <option value="count">Stock count</option>
+          <option value="sale_return">Customer return</option>
+          <option value="transfer_cancel_return">Cancelled transfer (returned)</option>
+          <option value="b2b_dispatch">Wholesale dispatch</option>
         </select>
       </div>
 
