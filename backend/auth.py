@@ -124,3 +124,12 @@ async def audit(db, user: Optional[dict], action: str, entity: str,
         "details": details, "created_at": now_iso(),
     }
     await db.audit_logs.insert_one(entry)
+
+
+def log_export(name: str):
+    """Dependency: record who downloaded which export (owner sees it in Audit)."""
+    async def _dep(request: Request, user: dict = Depends(get_current_user)) -> None:
+        params = {k: v for k, v in request.query_params.items() if k not in ("token",)}
+        await audit(request.app.state.db, user, f"export.{name}", "export", None,
+                    {"params": params, "ip": request.headers.get("cf-connecting-ip")})
+    return _dep

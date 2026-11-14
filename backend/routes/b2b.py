@@ -19,7 +19,7 @@ from models import (
     gen_id, now_iso, ROLE_OWNER, ROLE_STORE_MANAGER, LOC_BHIWANDI, LOC_STORE,
     _blank_to_none,
 )
-from auth import get_current_user, require_roles, audit
+from auth import get_current_user, require_roles, audit, log_export
 from security import safe_csv_writer, SafeDictWriter
 from routes.inventory import _apply_delta, _write_movement
 
@@ -437,7 +437,7 @@ async def collections_dashboard(request: Request, user: dict = Depends(get_curre
     }
 
 
-@router.get("/collections/receivables.csv")
+@router.get("/collections/receivables.csv", dependencies=[Depends(log_export("receivables"))])
 async def receivables_csv(request: Request, user: dict = Depends(get_current_user)):
     db = request.app.state.db
     orders = await db.b2b_orders.find(

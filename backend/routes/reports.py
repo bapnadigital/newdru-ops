@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse
 from typing import Optional
 
 from models import LOCATIONS, ROLE_OWNER, ROLE_STORE_MANAGER, ROLE_WH_MANAGER
-from auth import get_current_user, require_roles, can_see_cost
+from auth import get_current_user, require_roles, can_see_cost, log_export
 from security import safe_csv_writer, SafeDictWriter
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -116,7 +116,7 @@ async def sales_report(
     }
 
 
-@router.get("/sales/csv")
+@router.get("/sales/csv", dependencies=[Depends(log_export("sales"))])
 async def sales_csv(
     request: Request,
     from_date: Optional[str] = None,
@@ -143,7 +143,7 @@ async def sales_csv(
                              headers={"Content-Disposition": "attachment; filename=sales_report.csv"})
 
 
-@router.get("/inventory/csv")
+@router.get("/inventory/csv", dependencies=[Depends(log_export("inventory"))])
 async def inventory_csv(
     request: Request,
     user: dict = Depends(require_roles(ROLE_OWNER, ROLE_STORE_MANAGER, ROLE_WH_MANAGER)),

@@ -7,7 +7,7 @@ from datetime import datetime, timezone, timedelta
 from pymongo import UpdateOne
 
 from models import CustomerCreate, CustomerUpdate, ROLE_OWNER, ROLE_STORE_MANAGER, ROLE_CASHIER, gen_id, now_iso
-from auth import get_current_user, require_roles, audit
+from auth import get_current_user, require_roles, audit, log_export
 from security import safe_csv_writer, SafeDictWriter
 
 router = APIRouter(prefix="/customers", tags=["customers"])
@@ -194,7 +194,7 @@ async def segments(request: Request,
     return docs
 
 
-@router.get("/export/csv")
+@router.get("/export/csv", dependencies=[Depends(log_export("customers"))])
 async def export_csv(request: Request,
                      min_spend: Optional[float] = 0,
                      inactive_days: Optional[int] = None,

@@ -29,7 +29,7 @@ from fastapi.responses import StreamingResponse, Response
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from models import gen_id, now_iso, ROLE_OWNER, ROLE_STORE_MANAGER, _blank_to_none
-from auth import get_current_user, require_roles, audit
+from auth import get_current_user, require_roles, audit, log_export
 from security import safe_csv_writer, SafeDictWriter
 from services.geoip import lookup as geoip_lookup
 from security import client_ip, rate_limit
@@ -464,7 +464,7 @@ async def activity_feed(
     return {"total": total, "rows": rows}
 
 
-@admin.get("/export.csv")
+@admin.get("/export.csv", dependencies=[Depends(log_export("warranty"))])
 async def export_csv(request: Request,
                      user: dict = Depends(require_roles(ROLE_OWNER))):
     db = request.app.state.db

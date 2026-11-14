@@ -8,7 +8,7 @@ from models import (
     ProductCreate, ProductUpdate, ROLE_OWNER, ROLE_STORE_MANAGER, ROLE_WH_MANAGER,
     gen_id, now_iso,
 )
-from auth import get_current_user, require_roles, audit, can_see_cost
+from auth import get_current_user, require_roles, audit, can_see_cost, log_export
 from security import safe_csv_writer, SafeDictWriter
 from services.pricing import compute_pricing, redact_cost_fields
 
@@ -248,7 +248,7 @@ async def import_csv(request: Request, file: UploadFile = File(...),
     return {"created": created, "updated": updated, "errors": errors[:20]}
 
 
-@router.get("/export/csv")
+@router.get("/export/csv", dependencies=[Depends(log_export("products"))])
 async def export_csv(request: Request,
                      user: dict = Depends(require_roles(ROLE_OWNER, ROLE_STORE_MANAGER, ROLE_WH_MANAGER))):
     db = request.app.state.db

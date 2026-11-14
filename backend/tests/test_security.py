@@ -193,3 +193,14 @@ def test_production_never_seeds_demo_password(monkeypatch):
         r = c.post("/api/auth/login", json={"email": "admin@newdru.com", "password": "Newdru@2026"})
         assert r.status_code == 401
         assert c.portal.call(server.db.users.count_documents, {}) == 0
+
+
+
+def test_exports_are_audited(app_client):
+    c, server = app_client
+    owner = bearer(c, "admin@newdru.com", OWNER_PW)
+    assert c.get("/api/customers/export/csv", headers=owner).status_code == 200
+    async def logs():
+        return await server.db.audit_logs.find({"action": "export.customers"}).to_list(10)
+    entries = c.portal.call(logs)
+    assert len(entries) == 1
