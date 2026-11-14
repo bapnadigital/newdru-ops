@@ -162,6 +162,16 @@ async def seed_admin_and_indexes():
     await db.warranty_activity.create_index("event")
     await db.warranty_claims.create_index("warranty_id")
     await db.warranty_claims.create_index("status")
+    # Lookups the app does on every bill / order / shipment
+    for coll, key in (("sales", "id"), ("sales", "customer_id"), ("sales", "items.product_id"),
+                      ("b2b_orders", "id"), ("shipments", "id"), ("warranty_claims", "id"),
+                      ("stock_counts", "created_at"), ("transfers", "created_at")):
+        await db[coll].create_index(key)
+    try:  # one terminal payment can only ever pay one bill
+        await db.pinelabs_txns.create_index("ptr_id", unique=True, sparse=True)
+    except Exception as e:  # old data with duplicates: keep running, plain index
+        logger.warning("pinelabs ptr_id not unique (%s); using normal index", e)
+        await db.pinelabs_txns.create_index("ptr_id")
 
     # Seed the 3 starter accounts ONLY if they do not exist yet.
     # Passwords are never overwritten on restart, so a password the owner
@@ -180,7 +190,12 @@ async def seed_admin_and_indexes():
         {"email": "warehouse@newdru.com", "password": seed_pw,
          "name": "Warehouse User", "role": "warehouse_manager"},
     ]
+    weak = {"Newdru@2026", "", None}
     for du in demo_users:
+        if IS_PROD and (du["password"] in weak or len(du["password"]) < 10):
+            # Never create a live login with the old public demo password.
+            logger.error("Not creating %s: set a strong SEED_PASSWORD (10+ chars) first", du["email"])
+            continue
         existing = await db.users.find_one({"email": du["email"]})
         if existing is None:
             await db.users.insert_one({

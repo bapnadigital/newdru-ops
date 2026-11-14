@@ -40,3 +40,4 @@ Scanners: pip-audit (clean), Bandit (only false positives / low), yarn audit (bu
 | SEC-025 | Medium | No Content-Security-Policy: any injected script could run and call out | Fixed: strict CSP (own scripts only), no inline scripts in the build |
 | SEC-026 | Low | Free MongoDB tier has no automatic backups | Mitigated — nightly backup to private R2 bucket (35 days), restore script; still upgrade to Flex for point-in-time recovery |
 | SEC-027 | Info | Offline POS queue stores unsent sales (with customer name/phone) in the till browser until it reconnects | Accepted — needed for offline billing; cleared on sync |
+| SEC-028 | Medium | Production could create starter logins with the public demo password if SEED_PASSWORD was not set | Fixed — refused in production, test added |

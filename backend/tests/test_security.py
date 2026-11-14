@@ -174,3 +174,22 @@ def test_csp_on_pages(app_client):
     c, _ = app_client
     r = c.get("/api/health")
     assert "content-security-policy" not in {k.lower() for k in r.headers}
+
+
+def test_production_never_seeds_demo_password(monkeypatch):
+    import importlib, uuid, motor.motor_asyncio
+    from mongomock_motor import AsyncMongoMockClient
+    from fastapi.testclient import TestClient
+    monkeypatch.setenv("MONGO_URL", "mongodb://x")
+    monkeypatch.setenv("DB_NAME", f"seed_{uuid.uuid4().hex[:8]}")
+    monkeypatch.setenv("JWT_SECRET", "x" * 48)
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.delenv("SEED_PASSWORD", raising=False)
+    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
+    monkeypatch.setattr(motor.motor_asyncio, "AsyncIOMotorClient", AsyncMongoMockClient)
+    sys.modules.pop("server", None)
+    server = importlib.import_module("server")
+    with TestClient(server.app, base_url="https://t") as c:
+        r = c.post("/api/auth/login", json={"email": "admin@newdru.com", "password": "Newdru@2026"})
+        assert r.status_code == 401
+        assert c.portal.call(server.db.users.count_documents, {}) == 0
