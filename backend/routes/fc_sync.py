@@ -274,6 +274,7 @@ async def cron(request: Request):
     if not secret_matches(request.headers.get("x-cron-token"), expected):
         raise HTTPException(401, "Unauthorized")
     db = request.app.state.db
+    await db.settings.update_one({"_id": "scheduler_heartbeat"}, {"$set": {"at": now_iso()}}, upsert=True)
     out = {"unicommerce": await ucs.run_due(db)}
     from routes.shipping import refresh_active
     from services import scheduled
@@ -320,3 +321,61 @@ async def backup(request: Request):
     return Response(content=data, media_type="application/gzip",
                     headers={"X-Backup-Collections": str(len(counts)),
                              "X-Backup-Documents": str(sum(counts.values()))})
+
+
+# ---- Owner-only "is everything still running?" panel ----
+system = APIRouter(prefix="/system", tags=["system"])
+
+# (label, sync_runs source, kind, how many minutes before it counts as late)
+_JOBS = [
+    ("Unicommerce stock pull", "unicommerce", "inventory", 90),
+    ("Unicommerce orders", "unicommerce", "orders", 180),
+    ("Shopify orders", "shopify", "orders", 180),
+    ("Nightly backup", "backup", "nightly", 26 * 60),
+]
+
+
+def _age_min(iso: Optional[str]) -> Optional[int]:
+    if not iso:
+        return None
+    try:
+        t = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
+        return int((datetime.now(timezone.utc) - t).total_seconds() // 60)
+    except ValueError:
+        return None
+
+
+@system.get("/health")
+async def system_health(request: Request, actor: dict = Depends(require_roles(ROLE_OWNER))):
+    db = request.app.state.db
+    hb = await db.settings.find_one({"_id": "scheduler_heartbeat"}) or {}
+    hb_age = _age_min(hb.get("at"))
+    jobs = []
+    for label, source, kind, late_after in _JOBS:
+        last = await db.sync_runs.find_one({"source": source, "kind": kind},
+                                           {"_id": 0, "ok": 1, "finished_at": 1, "result": 1},
+                                           sort=[("finished_at", -1)])
+        ok_last = await db.sync_runs.find_one({"source": source, "kind": kind, "ok": True},
+                                              {"_id": 0, "finished_at": 1}, sort=[("finished_at", -1)])
+        age = _age_min((ok_last or {}).get("finished_at"))
+        if last is None:
+            state = "never"
+        elif not last.get("ok"):
+            state = "failing"
+        elif age is not None and age > late_after:
+            state = "late"
+        else:
+            state = "ok"
+        err = None
+        if last and not last.get("ok"):
+            r = last.get("result") or {}
+            err = str(r.get("error") or r)[:200]
+        jobs.append({"name": label, "state": state, "last_success": (ok_last or {}).get("finished_at"),
+                     "minutes_ago": age, "error": err})
+    return {
+        "scheduler": {"state": "never" if hb_age is None else ("ok" if hb_age <= 15 else "late"),
+                      "last_beat": hb.get("at"), "minutes_ago": hb_age},
+        "jobs": jobs,
+    }

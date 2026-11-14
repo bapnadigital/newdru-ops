@@ -27,7 +27,7 @@ from routes.labels import router as labels_router
 from routes.integrations_routes import router as integrations_router
 from routes.pinelabs import router as pinelabs_router
 from routes.b2b import router as b2b_router
-from routes.fc_sync import router as fc_sync_router, internal as internal_router
+from routes.fc_sync import router as fc_sync_router, internal as internal_router, system as system_router
 from routes.messaging_routes import router as messaging_router
 from routes.bulk_import import router as bulk_import_router
 from routes.planner import router as planner_router
@@ -85,6 +85,7 @@ api_router.include_router(pinelabs_router)
 api_router.include_router(b2b_router)
 api_router.include_router(fc_sync_router)
 api_router.include_router(internal_router)
+api_router.include_router(system_router)
 api_router.include_router(messaging_router)
 api_router.include_router(bulk_import_router)
 api_router.include_router(planner_router)

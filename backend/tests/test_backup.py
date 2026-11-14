@@ -49,3 +49,21 @@ def test_backup_contains_data_and_skips_noise(app):
     assert data["collections"]["products"][0]["sku"] == "S1"
     assert "users" in data["collections"]
     assert "rate_limits" not in data["collections"]
+
+
+def test_system_health_owner_only_and_reports_backup(app):
+    c, server = app
+    login = c.post("/api/auth/login", json={"email": "admin@newdru.com", "password": "Owner-Test-Pass-2026"})
+    c.cookies.clear()
+    owner = {"Authorization": f"Bearer {login.json()['token']}"}
+    login = c.post("/api/auth/login", json={"email": "store@newdru.com", "password": "Seed-Test-Pass-2026"})
+    c.cookies.clear()
+    store = {"Authorization": f"Bearer {login.json()['token']}"}
+    assert c.get("/api/system/health", headers=store).status_code == 403
+    h = c.get("/api/system/health", headers=owner).json()
+    assert h["scheduler"]["state"] == "never"
+    c.post("/api/internal/cron", headers={"X-Cron-Token": "c" * 40})
+    c.post("/api/internal/backup", headers={"X-Cron-Token": "c" * 40})
+    h = c.get("/api/system/health", headers=owner).json()
+    assert h["scheduler"]["state"] == "ok"
+    assert {j["name"]: j["state"] for j in h["jobs"]}["Nightly backup"] == "ok"

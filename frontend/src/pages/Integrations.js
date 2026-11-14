@@ -86,6 +86,8 @@ export default function Integrations() {
         <p className="text-sm text-slate-500">Payment terminal, Unicommerce stock and order sync, and outbound messaging. Keys are stored as Cloudflare secrets, never in the app.</p>
       </div>
 
+      <SystemHealth />
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card icon={<CreditCard size={18} />} title="Pine Labs terminal" mode={pl?.mode}
               subtitle="Cloud API v1 (Plutus) — card + UPI on a physical terminal.">
@@ -171,6 +173,49 @@ export default function Integrations() {
             <Row k="Configured" v={msg?.msg91?.configured ? "yes" : "no — set MSG91_AUTH_KEY (+ optional MSG91_SENDER_ID)"} />
           </div>
         </Card>
+      </div>
+    </div>
+  );
+}
+
+const HEALTH_STYLE = {
+  ok: ["bg-emerald-100 text-emerald-800", "Running"],
+  late: ["bg-amber-100 text-amber-800", "Late"],
+  failing: ["bg-red-100 text-red-800", "Failing"],
+  never: ["bg-slate-100 text-slate-600", "Not started"],
+};
+
+function ago(m) {
+  if (m === null || m === undefined) return "—";
+  if (m < 60) return `${m} min ago`;
+  if (m < 48 * 60) return `${Math.round(m / 60)} h ago`;
+  return `${Math.round(m / 1440)} days ago`;
+}
+
+// Owner-only: is the 24/7 background work still happening?
+function SystemHealth() {
+  const [h, setH] = useState(null);
+  useEffect(() => {
+    api.get("/system/health").then(r => setH(r.data)).catch(() => setH(null));
+  }, []);
+  if (!h) return null;
+  const rows = [{ name: "Background scheduler (every 5 min)", state: h.scheduler.state, minutes_ago: h.scheduler.minutes_ago }, ...h.jobs];
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl p-4 mb-4" data-testid="system-health">
+      <div className="font-semibold text-slate-900 mb-2">System health</div>
+      <div className="divide-y divide-slate-100">
+        {rows.map((r) => {
+          const [cls, label] = HEALTH_STYLE[r.state] || HEALTH_STYLE.never;
+          return (
+            <div key={r.name} className="flex items-center justify-between py-1.5 text-sm gap-3">
+              <span className="text-slate-700">{r.name}</span>
+              <span className="flex items-center gap-2 shrink-0">
+                <span className="text-xs text-slate-500" title={r.error || ""}>{r.state === "never" ? "" : `last OK ${ago(r.minutes_ago)}`}</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full ${cls}`}>{label}</span>
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

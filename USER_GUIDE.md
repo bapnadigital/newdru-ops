@@ -340,3 +340,16 @@ Never type a card/UPI payment by hand — the app will refuse it once the machin
 **Store home delivery (owner / store manager):** after completing a bill, press **Home delivery (Shiprocket)** under "Sale complete" and do the same.
 
 Amazon, Flipkart and newdru.com orders are not shipped from this app.
+
+## 17. System health (owner only)
+
+**Integrations → System health** shows whether the background work is still happening:
+
+| Line | Should say "Running" and… |
+|---|---|
+| Background scheduler | last OK within 5–15 min. If "Late", the site may be down; open mynewdru.in and check. |
+| Unicommerce stock pull / orders | once Unicommerce is connected; every 30 min / hourly |
+| Shopify orders | once the Shopify secret is added; hourly |
+| Nightly backup | once a day, around 2 am |
+
+"Not started" just means that connection has not been set up yet. "Failing" means the last attempt gave an error; hover over the time to see it.
