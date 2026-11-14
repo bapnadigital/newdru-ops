@@ -270,8 +270,21 @@ async def dispatch_order(oid: str, request: Request,
     db = request.app.state.db
     o = await db.b2b_orders.find_one({"id": oid})
     if not o: raise HTTPException(404, "Not found")
-    if o["status"] not in ("confirmed", "draft"):
+    if o.get("dispatched_at"):
+        raise HTTPException(400, f"Already dispatched ({o.get('dispatch_no')})")
+    # Goods can leave before or after the invoice is raised.
+    if o["status"] not in ("confirmed", "draft", "invoiced", "partially_paid", "paid"):
         raise HTTPException(400, f"Cannot dispatch in status {o['status']}")
+    dispatch_no = f"DN-{o['order_no']}"
+    now = now_iso()
+    # Claim the dispatch atomically so a double-click can't take stock off twice.
+    claimed = await db.b2b_orders.find_one_and_update(
+        {"id": oid, "dispatched_at": None},
+        {"$set": {"dispatched_at": now, "dispatch_no": dispatch_no, "updated_at": now}})
+    if not claimed:
+        raise HTTPException(409, "This order is already being dispatched")
+    if o["status"] in ("confirmed", "draft"):
+        await db.b2b_orders.update_one({"id": oid}, {"$set": {"status": "dispatched"}})
 
     # Decrement stock at ship_from
     ship_loc = o.get("ship_from", LOC_BHIWANDI)
@@ -283,13 +296,9 @@ async def dispatch_order(oid: str, request: Request,
         await _write_movement(db, actor, product, ship_loc, -qty, "b2b_dispatch",
                               reference_id=o["id"])
 
-    dispatch_no = f"DN-{o['order_no']}"
-    now = now_iso()
-    await db.b2b_orders.update_one({"id": oid}, {"$set": {
-        "status": "dispatched", "dispatched_at": now, "dispatch_no": dispatch_no, "updated_at": now,
-    }})
     await audit(db, actor, "b2b.order.dispatch", "b2b_order", oid, {"dispatch_no": dispatch_no})
-    return {"id": oid, "status": "dispatched", "dispatch_no": dispatch_no}
+    status = "dispatched" if o["status"] in ("confirmed", "draft") else o["status"]
+    return {"id": oid, "status": status, "dispatch_no": dispatch_no}
 
 
 @router.post("/orders/{oid}/invoice")

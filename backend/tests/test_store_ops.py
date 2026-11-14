@@ -93,3 +93,23 @@ def test_live_terminal_requires_approved_ptr(app, monkeypatch):
     async def qty():
         return (await server.db.inventory.find_one({"product_id": "p-SKU-2", "location_code": "STORE"}))["quantity"]
     assert c.portal.call(qty) == 4
+
+
+def test_b2b_dispatch_after_invoice_moves_stock_once(app):
+    c, server = app
+    seed_product(c, server, "SKU-9", 0)
+    async def stock():
+        await server.db.inventory.insert_one({"product_id": "p-SKU-9", "location_code": "BHIWANDI", "quantity": 50})
+        await server.db.b2b_orders.insert_one({"id": "o1", "order_no": "SO-1", "customer_id": "c1", "ship_from": "BHIWANDI",
+            "items": [{"product_id": "p-SKU-9", "quantity": 5}], "total": 500.0, "status": "confirmed",
+            "dispatched_at": None, "invoice_no": None, "paid_amount": 0.0, "payment_terms_days": 30})
+    c.portal.call(stock)
+    owner = bearer(c, "admin@newdru.com", OWNER_PW)
+    assert c.post("/api/b2b/orders/o1/invoice", headers=owner).status_code == 200
+    r = c.post("/api/b2b/orders/o1/dispatch", headers=owner)
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "invoiced"            # invoice status kept
+    assert c.post("/api/b2b/orders/o1/dispatch", headers=owner).status_code == 400  # not twice
+    async def qty():
+        return (await server.db.inventory.find_one({"product_id": "p-SKU-9", "location_code": "BHIWANDI"}))["quantity"]
+    assert c.portal.call(qty) == 45

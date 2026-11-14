@@ -81,7 +81,7 @@ function Orders() {
                 <td className="text-xs text-slate-500">{o.due_date?.slice(0, 10) || "—"}</td>
                 <td>
                   <div className="flex gap-1">
-                    {o.status === "confirmed" && <button onClick={() => act(o.id, "dispatch")} className="px-2 py-1 border border-slate-300 rounded text-xs flex items-center gap-1"><Truck size={12} />Dispatch</button>}
+                    {!o.dispatched_at && ["confirmed", "invoiced", "partially_paid", "paid"].includes(o.status) && <button onClick={() => act(o.id, "dispatch")} className="px-2 py-1 border border-slate-300 rounded text-xs flex items-center gap-1"><Truck size={12} />Dispatch</button>}
                     {(o.status === "dispatched" || o.status === "confirmed") && !o.invoice_no && <button onClick={() => act(o.id, "invoice")} className="px-2 py-1 bg-indigo-600 text-white rounded text-xs flex items-center gap-1"><FileText size={12} />Invoice</button>}
                     {o.outstanding > 0 && o.invoice_no && <PaymentButton orderId={o.id} onDone={load} />}
                     {shipOn && o.status !== "cancelled" && !o.shipment?.awb && (
