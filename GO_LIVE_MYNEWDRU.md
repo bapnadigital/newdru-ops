@@ -70,7 +70,9 @@ Done: `bapnadigital/newdru-ops` now holds the clean code. The old repo `newdru-m
 
 ### Step 4 — Let GitHub deploy to Cloudflare, with your approval
 
-1. Cloudflare → profile icon → **My Profile** → **API Tokens** → **Create Token** → use the template **Edit Cloudflare Workers** → Account: your account; Zone: **mynewdru.in** → **Create**. Copy the token (shown once).
+1. Cloudflare → profile icon → **My Profile** → **API Tokens** → **Create Token** → use the template **Edit Cloudflare Workers** → Account: your account; Zone: **mynewdru.in**.
+   Before creating, under **Permissions** click **+ Add more** and make sure these three Account rows are there (add any that are missing): **Containers → Edit**, **Workers R2 Storage → Edit**, **Workers Scripts → Edit**. Then **Continue to summary** → **Create**. Copy the token (shown once).
+   *Already made the token without them?* API Tokens → the token's **⋯** → **Edit** → add the rows → **Save**. The token value stays the same, so GitHub doesn't need changing.
 2. Cloudflare → **Workers & Pages** → right side shows **Account ID**. Copy it.
 3. GitHub → `newdru-ops` → **Settings** → **Environments** → **New environment** → name `production`.
    - Tick **Required reviewers** → add **yourself** → Save.
