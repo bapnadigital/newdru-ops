@@ -2,7 +2,7 @@ import { NavLink } from "react-router-dom";
 import {
   LayoutDashboard, Package, Boxes, ScanBarcode, ArrowLeftRight,
   ShoppingCart, Users, LineChart, UserCog, ClipboardList, LogOut, Plug,
-  Container, Wallet, ShieldCheck, Activity, LifeBuoy, Settings2, BookOpen, ListChecks, Undo2,
+  Container, Wallet, ShieldCheck, Activity, LifeBuoy, Settings2, BookOpen, ListChecks, Undo2, History,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import NewdruLogo from "@/components/NewdruLogo";
@@ -42,6 +42,7 @@ const NAV = [
   { to: "/warranty-analytics", label: "Analytics", icon: LineChart, roles: [...OWNER, "store_manager"], section: "Warranty" },
   { to: "/warranty-settings", label: "Warranty Settings", icon: Settings2, roles: OWNER, section: "Warranty" },
   { to: "/users", label: "Users", icon: UserCog, roles: OWNER, section: "Admin" },
+  { to: "/activity", label: "Activity Log", icon: History, roles: OWNER, section: "Admin" },
   { to: "/integrations", label: "Integrations", icon: Plug, roles: OWNER, section: "Admin" },
   { to: "/help", label: "User Guide", icon: BookOpen, roles: ANY, section: "Admin" },
 ];

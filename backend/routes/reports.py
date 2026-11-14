@@ -173,8 +173,26 @@ async def inventory_csv(
 
 
 @router.get("/audit")
-async def audit_log(request: Request, limit: int = 200,
+async def audit_log(request: Request, limit: int = 200, area: Optional[str] = None,
+                    user_name: Optional[str] = None, from_date: Optional[str] = None,
+                    to_date: Optional[str] = None,
                     user: dict = Depends(require_roles(ROLE_OWNER))):
+    """Owner's activity log. area = export | sale | inventory | transfer | product | user | login | ..."""
+    import re as _re
     db = request.app.state.db
-    docs = await db.audit_logs.find({}, {"_id": 0}).sort("created_at", -1).to_list(limit)
+    q: dict = {}
+    if area:
+        a = _re.sub(r"[^a-z_]", "", area.lower())[:30]
+        if a == "login":
+            q["action"] = {"$in": ["login", "logout", "admin.override_verify"]}
+        elif a:
+            q["action"] = {"$regex": f"^{a}\\."}
+    if user_name:
+        q["user_name"] = {"$regex": _re.escape(user_name.strip()[:60]), "$options": "i"}
+    if from_date or to_date:
+        q["created_at"] = {}
+        if from_date: q["created_at"]["$gte"] = from_date
+        if to_date: q["created_at"]["$lte"] = to_date
+    limit = max(1, min(int(limit), 1000))
+    docs = await db.audit_logs.find(q, {"_id": 0}).sort("created_at", -1).to_list(limit)
     return docs

@@ -372,3 +372,7 @@ If nobody touches the mouse, keyboard or screen for **30 minutes**, the app sign
 ## 20. Who can change prices
 
 Only the **owner** can change the selling price, MRP, cost or GST rate of an existing product (on the Products screen or by CSV import). Managers can still fix names, barcodes and other details. At the till, prices always come from the product list. Cashiers cannot give discounts; the owner and store manager can.
+
+## 21. Activity log (owner only)
+
+**Activity Log** in the Admin menu shows who did what and when: bills, returns, stock changes, price edits, staff account changes, sign-ins and every data download. Nobody can edit or delete these entries. Pick **Data downloads** now and then: it shows anyone who downloaded the customer or sales list (highlighted in yellow).
