@@ -27,6 +27,7 @@ export default function POS() {
   const [terminalPolling, setTerminalPolling] = useState(false);
   const [pinelabsMode, setPinelabsMode] = useState("");
   const [autoBill, setAutoBill] = useState(false);
+  const grandRef = useRef(0);
   const [processing, setProcessing] = useState(false);
   const [lastSale, setLastSale] = useState(null);
   const [overrideOpen, setOverrideOpen] = useState(false);
@@ -86,12 +87,15 @@ export default function POS() {
           if (data.status === "APPROVED") {
             // Auto-fill the last payment row with the approved terminal amount
             const method = data.mode === "upi" ? "upi" : "card";
-            setPayments((ps) => {
-              const others = ps.filter(p => p.method !== method || p.amount === 0);
-              return [...others.filter(p => p.amount > 0),
-                      { method, amount: data.amount, ptr_id: data.ptr_id, rrn: data.rrn,
-                        approval_code: data.approval_code, masked_pan: data.masked_pan, acquirer: data.acquirer }];
-            });
+            // The machine payment replaces any auto-filled cash amount; only a genuine
+            // shortfall (split payment) is left for cash.
+            const grand = grandRef.current;
+            const remaining = Math.round((grand - Number(data.amount || 0)) * 100) / 100;
+            setPayments([
+              { method, amount: data.amount, ptr_id: data.ptr_id, rrn: data.rrn,
+                approval_code: data.approval_code, masked_pan: data.masked_pan, acquirer: data.acquirer },
+              ...(remaining > 0.05 ? [{ method: "cash", amount: remaining }] : []),
+            ]);
             toast.success(`Terminal approved · ${data.masked_pan || data.acquirer || ""} · generating bill…`);
             setAutoBill(true);
           } else {
@@ -245,11 +249,14 @@ export default function POS() {
 
   // When the Pine Labs terminal approves and the payments now cover the bill,
   // complete the sale automatically: GST invoice + store stock goes down.
+  grandRef.current = totals.grand;
+
   useEffect(() => {
     if (!autoBill) return;
     setAutoBill(false);
-    if (Math.abs(totalPaid - totals.grand) <= 0.05 && cart.length > 0) checkout();
-    else toast.info("Terminal paid part of the bill — add the remaining payment, then press Complete");
+    const terminalPaid = payments.filter((p) => p.ptr_id).reduce((a, p) => a + Number(p.amount || 0), 0);
+    if (Math.abs(terminalPaid - totals.grand) <= 0.05 && cart.length > 0) checkout();
+    else toast.info("Terminal paid part of the bill — collect the rest in cash, then press Complete");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoBill, payments]);
 
@@ -550,7 +557,7 @@ export default function POS() {
                       <button onClick={async () => {
                         await api.post(`/pinelabs/cancel/${terminalPTR}`); setTerminalPolling(false); setTerminalPTR(null); setTerminalStatus(null);
                       }} className="flex-1 px-2 py-1 border border-red-300 text-red-700 rounded">Cancel</button>
-                      {pinelabsMode === "simulator" && (
+                      {pinelabsMode === "simulator" && user.role === "owner" && (
                         <button data-testid="pos-sim-approve" onClick={async () => {
                           await api.post(`/pinelabs/simulate/${terminalPTR}/approve`, { outcome: "approved" });
                         }} className="flex-1 px-2 py-1 border border-emerald-300 text-emerald-700 rounded">Simulate ✓</button>

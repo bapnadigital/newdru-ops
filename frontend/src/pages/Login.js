@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Navigate } from "react-router-dom";
+import { useNavigate, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import NewdruLogo from "@/components/NewdruLogo";
 import { Loader2 } from "lucide-react";
@@ -7,18 +7,22 @@ import { Loader2 } from "lucide-react";
 export default function Login() {
   const { user, login, error } = useAuth();
   const nav = useNavigate();
+  const location = useLocation();
+  // Only allow in-app paths (never an outside URL) as the return address.
+  const from = typeof location.state?.from === "string" && location.state.from.startsWith("/") && !location.state.from.startsWith("//")
+    ? location.state.from : "/";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  if (user) return <Navigate to="/" replace />;
+  if (user) return <Navigate to={from} replace />;
 
   const submit = async (e) => {
     e.preventDefault();
     setLoading(true);
     const res = await login(email, password);
     setLoading(false);
-    if (res.ok) nav("/");
+    if (res.ok) nav(from, { replace: true });
   };
 
   return (
