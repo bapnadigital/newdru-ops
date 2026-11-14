@@ -368,3 +368,7 @@ For an exchange: do the return first (refund as store credit), then ring up the 
 ## 19. Automatic sign-out
 
 If nobody touches the mouse, keyboard or screen for **30 minutes**, the app signs out by itself. This stops someone billing or doing returns under another person's name on the shop computer. Just sign in again; nothing is lost (a half-made cart may need re-scanning).
+
+## 20. Who can change prices
+
+Only the **owner** can change the selling price, MRP, cost or GST rate of an existing product (on the Products screen or by CSV import). Managers can still fix names, barcodes and other details. At the till, prices always come from the product list. Cashiers cannot give discounts; the owner and store manager can.

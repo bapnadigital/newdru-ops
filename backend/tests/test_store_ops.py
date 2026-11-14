@@ -226,3 +226,13 @@ def test_price_comes_from_product_list_and_cashier_cannot_discount(app):
     disc = _sale("SKU-P", 100, {"method": "cash", "amount": 90})
     disc["cart_discount"] = 10
     assert c.post("/api/pos/sales", json=disc, headers=cashier).status_code == 403
+
+
+def test_only_owner_changes_prices(app):
+    c, server = app
+    seed_product(c, server, "SKU-$", 1)
+    store = bearer(c, "store@newdru.com", SEED_PW)
+    assert c.patch("/api/products/p-SKU-$", json={"sell_price": 50}, headers=store).status_code == 403
+    assert c.patch("/api/products/p-SKU-$", json={"name": "Renamed"}, headers=store).status_code == 200
+    owner = bearer(c, "admin@newdru.com", OWNER_PW)
+    assert c.patch("/api/products/p-SKU-$", json={"sell_price": 120}, headers=owner).status_code == 200

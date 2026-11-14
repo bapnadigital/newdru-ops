@@ -199,6 +199,8 @@ function ProductModal({ product, onClose, onSaved, showCost }) {
   const [p, setP] = useState(product);
   const [saving, setSaving] = useState(false);
   const isEdit = !!p.id;
+  const { user } = useAuth();
+  const priceLocked = isEdit && user?.role !== "owner"; // only the owner changes prices
 
   const save = async () => {
     setSaving(true);
@@ -231,7 +233,7 @@ function ProductModal({ product, onClose, onSaved, showCost }) {
             <Field label="Brand"><input value={p.brand || ""} onChange={(e) => setP({ ...p, brand: e.target.value })} className="input" /></Field>
             <Field label="Category"><input value={p.category || ""} onChange={(e) => setP({ ...p, category: e.target.value })} className="input" /></Field>
             <Field label="Variant"><input value={p.variant || ""} onChange={(e) => setP({ ...p, variant: e.target.value })} className="input" /></Field>
-            <Field label="MRP ₹"><input type="number" step="0.01" value={p.mrp} onChange={(e) => setP({ ...p, mrp: parseFloat(e.target.value || 0) })} className="input" /></Field>
+            <Field label={priceLocked ? "MRP ₹ (owner only)" : "MRP ₹"}><input type="number" step="0.01" value={p.mrp} disabled={priceLocked} onChange={(e) => setP({ ...p, mrp: parseFloat(e.target.value || 0) })} className="input" /></Field>
             <Field label="HSN Code"><input value={p.hsn || ""} onChange={(e) => setP({ ...p, hsn: e.target.value })} className="input" /></Field>
             <Field label="Channel">
               <select value={p.channel_scope} onChange={(e) => setP({ ...p, channel_scope: e.target.value })} className="input">
@@ -247,7 +249,10 @@ function ProductModal({ product, onClose, onSaved, showCost }) {
             </Field>
           </div>
 
-          {showCost && (
+          {showCost && priceLocked && (
+            <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">Prices and cost can only be changed by the owner. You can still edit the other details.</div>
+          )}
+          {showCost && !priceLocked && (
             <PricingCalculator
               buyIncl={p.buy_price || 0}
               gstRate={p.gst_rate ?? 18}

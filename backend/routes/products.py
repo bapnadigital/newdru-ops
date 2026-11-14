@@ -12,6 +12,9 @@ from auth import get_current_user, require_roles, audit, can_see_cost, log_expor
 from security import safe_csv_writer, SafeDictWriter
 from services.pricing import compute_pricing, redact_cost_fields
 
+# Selling price, MRP, cost and GST on existing products: owner only.
+PRICE_FIELDS = ("sell_price", "mrp", "buy_price", "cogs_per_unit", "gst_rate")
+
 router = APIRouter(prefix="/products", tags=["products"])
 
 
@@ -133,6 +136,10 @@ async def update_product(
     if not existing: raise HTTPException(404, "Product not found")
 
     updates = {k: v for k, v in body.model_dump(exclude_unset=True).items() if v is not None}
+    if actor.get("role") != ROLE_OWNER:
+        changed = [k for k in PRICE_FIELDS if k in updates and float(updates[k] or 0) != float(existing.get(k) or 0)]
+        if changed:
+            raise HTTPException(403, f"Only the owner can change {', '.join(changed)}")
     if "barcode" in updates and updates["barcode"] != existing.get("barcode"):
         if await db.products.find_one({"barcode": updates["barcode"], "id": {"$ne": product_id}}):
             raise HTTPException(409, "Barcode already in use")
@@ -211,6 +218,11 @@ async def import_csv(request: Request, file: UploadFile = File(...),
 
             existing = await db.products.find_one({"sku": sku})
             if existing:
+                if actor.get("role") != ROLE_OWNER:
+                    # Only the owner changes prices/cost on existing products.
+                    changed = [k for k in PRICE_FIELDS if k in provided and float(provided[k] or 0) != float(existing.get(k) or 0)]
+                    if changed:
+                        errors.append({"row": i, "error": f"Only the owner can change {', '.join(changed)}"}); continue
                 provided["updated_at"] = now_iso()
                 # If channel_scope flipped to online_offline and no barcode was supplied, keep existing.
                 if provided.get("channel_scope") == "online_offline" and not provided.get("barcode") and not existing.get("barcode"):
