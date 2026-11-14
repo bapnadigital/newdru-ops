@@ -41,6 +41,10 @@ async def dashboard(request: Request, user: dict = Depends(require_roles(ROLE_OW
                                                 {"_id": 0, "refund_total": 1}).to_list(5000)
     refunds_total = round(sum(float(r.get("refund_total", 0)) for r in refunds_today), 2)
 
+    last_close = await db.cash_closings.find_one({}, {"_id": 0, "created_at": 1, "difference": 1, "by_name": 1,
+                                                      "expected": 1, "counted_cash": 1}, sort=[("created_at", -1)])
+    pending_counts = await db.stock_counts.count_documents({"status": "pending"})
+
     new_customers = await db.customers.count_documents({"first_seen": {"$gte": day_start}})
 
     inv = await db.inventory.find({}, {"_id": 0}).to_list(20000)
@@ -71,6 +75,8 @@ async def dashboard(request: Request, user: dict = Depends(require_roles(ROLE_OW
         "today_refunds_total": refunds_total,
         "today_refund_count": len(refunds_today),
         "today_net_sales": round(total_sales - refunds_total, 2),
+        "last_cash_close": last_close,
+        "pending_stock_counts": pending_counts,
         "by_method": {k: round(v, 2) for k, v in by_method.items()},
         "top_skus": top_list,
         "new_customers_today": new_customers,

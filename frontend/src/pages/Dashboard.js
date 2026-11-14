@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { api, inr, canSeeCost } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
@@ -28,6 +29,21 @@ export default function Dashboard() {
         </div>
         <div className="text-sm text-slate-500">Today · {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short" })}</div>
       </div>
+
+      {(data.pending_stock_counts > 0 || (data.last_cash_close && data.last_cash_close.difference < 0)) && (
+        <div className="mb-4 space-y-2" data-testid="owner-alerts">
+          {data.last_cash_close && data.last_cash_close.difference < 0 && (
+            <Link to="/cash" className="block bg-red-50 border border-red-200 text-red-800 rounded-lg px-4 py-2 text-sm">
+              Last cash-up ({new Date(data.last_cash_close.created_at).toLocaleDateString("en-IN")}, {data.last_cash_close.by_name}) was <b>{inr(-data.last_cash_close.difference)} short</b>.
+            </Link>
+          )}
+          {data.pending_stock_counts > 0 && (
+            <Link to="/stock-count" className="block bg-amber-50 border border-amber-200 text-amber-900 rounded-lg px-4 py-2 text-sm">
+              {data.pending_stock_counts} stock count{data.pending_stock_counts > 1 ? "s are" : " is"} waiting for your approval.
+            </Link>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Kpi icon={<Receipt size={18} />} label="Today's Sales" value={inr(data.today_sales_total)} sub={data.today_order_count + " orders" + (data.today_refunds_total ? ` · ${inr(data.today_refunds_total)} refunded · net ${inr(data.today_net_sales)}` : "")} />
