@@ -1,0 +1,7 @@
+# Default gitleaks rules, plus: the fake passwords used only in automated tests.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fake test passwords (never real)"
+regexes = ['''(Owner|Seed)-Test-Pass-2026''', '''Another-Pass-2026''']
