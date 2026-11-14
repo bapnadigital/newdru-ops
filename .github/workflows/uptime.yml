@@ -1,9 +1,9 @@
-# Every 15 minutes: is mynewdru.in answering? If not, open a "site-down" issue
+# Every hour: is mynewdru.in answering? If not, open a "site-down" issue
 # (GitHub emails the owner). When it is back, the issue is closed automatically.
 # Stays quiet until the site has been deployed successfully at least once.
 name: Uptime check
 on:
-  schedule: [{ cron: "*/15 * * * *" }]
+  schedule: [{ cron: "7 * * * *" }]   # hourly: stays within free GitHub Actions minutes
   workflow_dispatch:
 permissions:
   issues: write
