@@ -1,0 +1,46 @@
+# Every 15 minutes: is mynewdru.in answering? If not, open a "site-down" issue
+# (GitHub emails the owner). When it is back, the issue is closed automatically.
+# Stays quiet until the site has been deployed successfully at least once.
+name: Uptime check
+on:
+  schedule: [{ cron: "*/15 * * * *" }]
+  workflow_dispatch:
+permissions:
+  issues: write
+  actions: read
+concurrency: { group: uptime, cancel-in-progress: false }
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      URL: https://mynewdru.in/api/health
+    steps:
+      - name: Has the site ever been deployed?
+        id: live
+        run: |
+          n=$(gh api "repos/${{ github.repository }}/actions/workflows/deploy.yml/runs?status=success&per_page=1" -q '.total_count' 2>/dev/null || echo 0)
+          echo "deployed=$([ "${n:-0}" -gt 0 ] && echo yes || echo no)" >> "$GITHUB_OUTPUT"
+      - name: Check health (3 tries)
+        id: health
+        if: steps.live.outputs.deployed == 'yes'
+        run: |
+          for i in 1 2 3; do
+            if curl -fsS --max-time 20 "$URL" | grep -q healthy; then echo "up=yes" >> "$GITHUB_OUTPUT"; exit 0; fi
+            sleep 30
+          done
+          echo "up=no" >> "$GITHUB_OUTPUT"
+      - name: Open or close the site-down issue
+        if: steps.live.outputs.deployed == 'yes'
+        run: |
+          gh label create site-down --color B60205 --description "mynewdru.in not answering" -R "${{ github.repository }}" 2>/dev/null || true
+          open=$(gh issue list -R "${{ github.repository }}" --label site-down --state open --json number -q '.[0].number')
+          now=$(TZ=Asia/Kolkata date '+%d %b %Y %H:%M IST')
+          if [ "${{ steps.health.outputs.up }}" = "no" ] && [ -z "$open" ]; then
+            gh issue create -R "${{ github.repository }}" --label site-down \
+              --title "mynewdru.in is not answering ($now)" \
+              --body "The health check at $URL failed 3 times in a row at $now. Open https://mynewdru.in to confirm, then check Cloudflare → Workers & Pages → newdru-ops → Logs. This issue closes itself when the site is back."
+          elif [ "${{ steps.health.outputs.up }}" = "yes" ] && [ -n "$open" ]; then
+            gh issue close "$open" -R "${{ github.repository }}" --comment "Back up at $now."
+          fi
