@@ -23,6 +23,7 @@ const LABEL = {
   "export.products": "Downloaded products",
   "export.receivables": "Downloaded wholesale dues",
   "export.warranty": "Downloaded warranty registrations",
+  "export.credit_notes": "Downloaded credit notes",
   "sale.create": "Made a bill",
   "sale.return": "Did a return / refund",
   "sale.below_cogs_override": "Sold below cost (approved)",

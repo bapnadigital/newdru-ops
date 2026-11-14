@@ -236,3 +236,14 @@ def test_only_owner_changes_prices(app):
     assert c.patch("/api/products/p-SKU-$", json={"name": "Renamed"}, headers=store).status_code == 200
     owner = bearer(c, "admin@newdru.com", OWNER_PW)
     assert c.patch("/api/products/p-SKU-$", json={"sell_price": 120}, headers=owner).status_code == 200
+
+
+def test_credit_notes_csv(app):
+    c, server = app
+    seed_product(c, server, "SKU-C", 5)
+    owner = bearer(c, "admin@newdru.com", OWNER_PW)
+    s = c.post("/api/pos/sales", json=_sale("SKU-C", 100, {"method": "cash", "amount": 100}), headers=owner).json()
+    c.post("/api/pos/returns", json={"sale_id": s["id"], "items": [{"product_id": "p-SKU-C", "quantity": 1}],
+                                     "reason": "faulty"}, headers=owner)
+    r = c.get("/api/reports/returns/csv", headers=owner)
+    assert r.status_code == 200 and "NW-CN-" in r.text and "18.00" in r.text

@@ -143,6 +143,31 @@ async def sales_csv(
                              headers={"Content-Disposition": "attachment; filename=sales_report.csv"})
 
 
+@router.get("/returns/csv", dependencies=[Depends(log_export("credit_notes"))])
+async def returns_csv(request: Request, from_date: Optional[str] = None, to_date: Optional[str] = None,
+                      user: dict = Depends(require_roles(ROLE_OWNER))):
+    """Credit notes for GST returns: one row per GST rate per credit note."""
+    db = request.app.state.db
+    q: dict = {}
+    if from_date or to_date:
+        q["created_at"] = {}
+        if from_date: q["created_at"]["$gte"] = from_date
+        if to_date: q["created_at"]["$lte"] = to_date
+    notes = await db.sales_returns.find(q, {"_id": 0}).sort("created_at", 1).to_list(20000)
+    output = io.StringIO()
+    w = safe_csv_writer(output)
+    w.writerow(["Credit note", "Date", "Against invoice", "Customer", "GST rate %", "Taxable value",
+                "GST", "Refund total (note)", "Refund method", "Reason", "By"])
+    for n in notes:
+        for rate, g in sorted((n.get("gst_breakup") or {"0": {"taxable": n.get("refund_total"), "tax": 0}}).items()):
+            w.writerow([n.get("credit_note_no"), n.get("created_at"), n.get("invoice_no"), n.get("customer_name") or "",
+                        rate, g.get("taxable"), g.get("tax"), n.get("refund_total"), n.get("refund_method"),
+                        n.get("reason"), n.get("by_name")])
+    output.seek(0)
+    return StreamingResponse(iter([output.getvalue()]), media_type="text/csv",
+                             headers={"Content-Disposition": "attachment; filename=credit_notes.csv"})
+
+
 @router.get("/inventory/csv", dependencies=[Depends(log_export("inventory"))])
 async def inventory_csv(
     request: Request,

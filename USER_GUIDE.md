@@ -361,6 +361,8 @@ Amazon, Flipkart and newdru.com orders are not shipped from this app.
 3. Choose how the money goes back: cash from the till, UPI, card reversal, or store credit. Write a short reason (e.g. "wrong size, exchanged for L").
 4. **Confirm return** → a numbered GST credit note appears → **Print credit note** and give it to the customer.
 
+For GST filing, **Reports → Credit notes CSV** downloads every credit note for the dates you pick, split by GST rate.
+
 The items go straight back into store stock. Cash refunds are taken off the expected cash in the till report. Cashiers cannot do returns; this is deliberate, because returns are the most common way cash goes missing. Bills older than 30 days need the owner.
 
 For an exchange: do the return first (refund as store credit), then ring up the new item as a normal sale.

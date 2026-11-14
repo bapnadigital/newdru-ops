@@ -19,11 +19,11 @@ export default function Reports() {
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
 
-  const download = async () => {
+  const download = async (kind = "sales") => {
     try {
-      const res = await api.get("/reports/sales/csv", { params: { from_date: from, to_date: to + "T23:59:59" }, responseType: "blob" });
+      const res = await api.get(`/reports/${kind}/csv`, { params: { from_date: from, to_date: to + "T23:59:59" }, responseType: "blob" });
       const url = URL.createObjectURL(new Blob([res.data]));
-      const a = document.createElement("a"); a.href = url; a.download = "sales.csv"; a.click();
+      const a = document.createElement("a"); a.href = url; a.download = kind === "returns" ? "credit_notes.csv" : "sales.csv"; a.click();
     } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
   };
 
@@ -44,7 +44,8 @@ export default function Reports() {
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="border border-slate-300 rounded-md px-2 py-2 text-sm" />
           </div>
           <button onClick={load} className="px-3 py-2 bg-[hsl(234_61%_25%)] text-white rounded-md text-sm">Run</button>
-          <button onClick={download} className="px-3 py-2 border border-slate-300 rounded-md text-sm flex items-center gap-1"><Download size={14} />CSV</button>
+          <button onClick={() => download("sales")} className="px-3 py-2 border border-slate-300 rounded-md text-sm flex items-center gap-1"><Download size={14} />Sales CSV</button>
+          <button onClick={() => download("returns")} data-testid="credit-notes-csv" className="px-3 py-2 border border-slate-300 rounded-md text-sm flex items-center gap-1"><Download size={14} />Credit notes CSV</button>
         </div>
       </div>
 
