@@ -106,6 +106,7 @@ export default function Transfers() {
   const [rows, setRows] = useState([]);
   const [showCreate, setShowCreate] = useState(false);
   const [detail, setDetail] = useState(null);
+  const [recv, setRecv] = useState({});
 
   const load = () => api.get("/stock/transfers").then((r) => setRows(r.data));
   useEffect(() => { load(); }, []);
@@ -139,7 +140,7 @@ export default function Transfers() {
             {rows.map((t) => {
               const s = STATUS_COLORS[t.status] || STATUS_COLORS.requested;
               return (
-                <tr key={t.id} className="cursor-pointer" onClick={() => setDetail(t)}>
+                <tr key={t.id} className="cursor-pointer" onClick={() => { setRecv({}); setDetail(t); }}>
                   <td className="font-mono text-[11px]">{t.id.slice(0, 8)}…</td>
                   <td>{LOCATION_LABEL[t.from_location]} <ArrowRight size={12} className="inline mx-1 text-slate-400" /> {LOCATION_LABEL[t.to_location]}</td>
                   <td>{t.items.length}</td>
@@ -174,7 +175,17 @@ export default function Transfers() {
                     <td className="py-2"><div>{it.name}</div><div className="text-xs text-slate-500 font-mono">{it.sku}</div></td>
                     <td className="text-right">{it.requested_qty}</td>
                     <td className="text-right">{it.dispatched_qty}</td>
-                    <td className="text-right">{it.received_qty}</td>
+                    <td className="text-right">
+                      {detail.status === "dispatched" ? (
+                        <input type="number" min="0" max={it.dispatched_qty} inputMode="numeric"
+                               data-testid={`recv-${idx}`}
+                               value={recv[it.product_id] ?? it.dispatched_qty}
+                               onChange={(e) => setRecv({ ...recv, [it.product_id]: e.target.value })}
+                               className="w-16 border border-slate-300 rounded px-1 py-0.5 text-right" />
+                      ) : (
+                        <>{it.received_qty}{it.short_qty > 0 && <span className="ml-1 text-xs text-red-600">({it.short_qty} short)</span>}</>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -190,11 +201,14 @@ export default function Transfers() {
               )}
               {detail.status === "dispatched" && hasRole("owner", "store_manager", "warehouse_manager", "warehouse_staff") && (
                 <button data-testid="transfer-receive" onClick={() => act(detail.id, "receive", {
-                  items: detail.items.map((it) => ({ product_id: it.product_id, received_qty: it.dispatched_qty })),
-                })} className="btn-brand">Receive all</button>
+                  items: detail.items.map((it) => ({ product_id: it.product_id,
+                    received_qty: Math.max(0, Math.min(Number(recv[it.product_id] ?? it.dispatched_qty) || 0, it.dispatched_qty)) })),
+                })} className="btn-brand">Confirm received</button>
               )}
-              {!["received", "cancelled"].includes(detail.status) && hasRole("owner", "store_manager", "warehouse_manager") && (
-                <button onClick={() => act(detail.id, "cancel")} className="btn-outline text-red-500">Cancel</button>
+              {["requested", "approved", "dispatched"].includes(detail.status) && hasRole("owner", "store_manager", "warehouse_manager") && (
+                <button onClick={() => act(detail.id, "cancel")} className="btn-outline text-red-500"
+                        title={detail.status === "dispatched" ? "Stock goes back to the sending location" : ""}>
+                  {detail.status === "dispatched" ? "Cancel (return stock)" : "Cancel"}</button>
               )}
             </div>
           </div>

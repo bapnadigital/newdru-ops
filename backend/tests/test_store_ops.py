@@ -113,3 +113,44 @@ def test_b2b_dispatch_after_invoice_moves_stock_once(app):
     async def qty():
         return (await server.db.inventory.find_one({"product_id": "p-SKU-9", "location_code": "BHIWANDI"}))["quantity"]
     assert c.portal.call(qty) == 45
+
+
+def _transfer(c, server, qty_sent):
+    async def go():
+        await server.db.inventory.update_one({"product_id": "p-SKU-T", "location_code": "BHIWANDI"},
+                                             {"$set": {"quantity": 100}}, upsert=True)
+        await server.db.transfers.insert_one({"id": "t1", "from_location": "BHIWANDI", "to_location": "STORE",
+            "status": "approved", "items": [{"product_id": "p-SKU-T", "sku": "SKU-T", "name": "T", "requested_qty": qty_sent}]})
+    c.portal.call(go)
+
+
+def _q(c, server, loc):
+    async def go():
+        d = await server.db.inventory.find_one({"product_id": "p-SKU-T", "location_code": loc})
+        return (d or {}).get("quantity", 0)
+    return c.portal.call(go)
+
+
+def test_transfer_cannot_over_receive_and_records_shortage(app):
+    c, server = app
+    seed_product(c, server, "SKU-T", 0)
+    _transfer(c, server, 10)
+    owner = bearer(c, "admin@newdru.com", OWNER_PW)
+    assert c.post("/api/stock/transfers/t1/dispatch", json={"items": [{"product_id": "p-SKU-T", "dispatched_qty": 999}]},
+                  headers=owner).status_code == 200
+    assert _q(c, server, "BHIWANDI") == 90                      # capped at requested 10
+    assert c.post("/api/stock/transfers/t1/dispatch", json={}, headers=owner).status_code == 400
+    c.post("/api/stock/transfers/t1/receive", json={"items": [{"product_id": "p-SKU-T", "received_qty": 50}]}, headers=owner)
+    assert _q(c, server, "STORE") == 10                         # capped at what was sent
+    assert c.post("/api/stock/transfers/t1/receive", json={}, headers=owner).status_code == 400
+
+
+def test_cancel_dispatched_transfer_returns_stock(app):
+    c, server = app
+    seed_product(c, server, "SKU-T", 0)
+    _transfer(c, server, 10)
+    owner = bearer(c, "admin@newdru.com", OWNER_PW)
+    c.post("/api/stock/transfers/t1/dispatch", json={}, headers=owner)
+    assert _q(c, server, "BHIWANDI") == 90
+    assert c.post("/api/stock/transfers/t1/cancel", headers=owner).status_code == 200
+    assert _q(c, server, "BHIWANDI") == 100

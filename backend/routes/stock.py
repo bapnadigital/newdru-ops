@@ -84,6 +84,16 @@ async def approve_transfer(tid: str, request: Request,
     return {"ok": True}
 
 
+def _qty(v) -> int:
+    try:
+        n = int(v)
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Quantities must be whole numbers")
+    if n < 0 or n > 1_000_000:
+        raise HTTPException(400, "Quantity out of range")
+    return n
+
+
 @router.post("/transfers/{tid}/dispatch")
 async def dispatch_transfer(tid: str, body: dict, request: Request,
                             actor: dict = Depends(require_roles(ROLE_OWNER, ROLE_WH_MANAGER, ROLE_STORE_MANAGER, ROLE_WH_STAFF))):
@@ -93,12 +103,17 @@ async def dispatch_transfer(tid: str, body: dict, request: Request,
     if t["status"] not in ("approved", "requested"):
         raise HTTPException(400, f"Cannot dispatch from status {t['status']}")
 
-    dispatch_map = {i["product_id"]: int(i.get("dispatched_qty", 0)) for i in body.get("items", [])}
+    dispatch_map = {i["product_id"]: _qty(i.get("dispatched_qty", 0)) for i in body.get("items", [])}
     updated_items = []
     for it in t["items"]:
-        d = dispatch_map.get(it["product_id"], it.get("requested_qty", 0))
-        it["dispatched_qty"] = d
+        asked = int(it.get("requested_qty", 0))
+        d = dispatch_map.get(it["product_id"], asked)
+        it["dispatched_qty"] = max(0, min(d, asked))   # can send less than asked, never more
         updated_items.append(it)
+    # Claim the step atomically so a double-click can't move stock twice.
+    if not await db.transfers.find_one_and_update(
+            {"id": tid, "status": t["status"]}, {"$set": {"status": "dispatching", "updated_at": now_iso()}}):
+        raise HTTPException(409, "This transfer is already being dispatched")
 
     for it in updated_items:
         d = int(it["dispatched_qty"])
@@ -128,12 +143,17 @@ async def receive_transfer(tid: str, body: dict, request: Request,
     if t["status"] != "dispatched":
         raise HTTPException(400, f"Cannot receive from status {t['status']}")
 
-    rmap = {i["product_id"]: int(i.get("received_qty", 0)) for i in body.get("items", [])}
+    rmap = {i["product_id"]: _qty(i.get("received_qty", 0)) for i in body.get("items", [])}
     updated_items = []
     for it in t["items"]:
-        r = rmap.get(it["product_id"], int(it.get("dispatched_qty", 0)))
-        it["received_qty"] = r
+        sent = int(it.get("dispatched_qty", 0))
+        r = rmap.get(it["product_id"], sent)
+        it["received_qty"] = max(0, min(r, sent))      # can't receive more than was sent
+        it["short_qty"] = sent - it["received_qty"]
         updated_items.append(it)
+    if not await db.transfers.find_one_and_update(
+            {"id": tid, "status": "dispatched"}, {"$set": {"status": "receiving", "updated_at": now_iso()}}):
+        raise HTTPException(409, "This transfer is already being received")
 
     for it in updated_items:
         r = int(it["received_qty"])
@@ -150,7 +170,8 @@ async def receive_transfer(tid: str, body: dict, request: Request,
                   "received_by": actor["id"], "received_by_name": actor["name"],
                   "updated_at": now_iso()}},
     )
-    await audit(db, actor, "transfer.receive", "transfer", tid, {"items": len(updated_items)})
+    short = sum(int(i.get("short_qty", 0)) for i in updated_items)
+    await audit(db, actor, "transfer.receive", "transfer", tid, {"items": len(updated_items), "units_short": short})
     return {"ok": True}
 
 
@@ -160,9 +181,20 @@ async def cancel_transfer(tid: str, request: Request,
     db = request.app.state.db
     t = await db.transfers.find_one({"id": tid})
     if not t: raise HTTPException(404, "Transfer not found")
-    if t["status"] in ("received", "cancelled"):
+    if t["status"] not in ("requested", "approved", "dispatched"):
         raise HTTPException(400, f"Cannot cancel from status {t['status']}")
-    await db.transfers.update_one({"id": tid},
-                                  {"$set": {"status": "cancelled", "updated_at": now_iso()}})
+    if not await db.transfers.find_one_and_update(
+            {"id": tid, "status": t["status"]}, {"$set": {"status": "cancelled", "updated_at": now_iso()}}):
+        raise HTTPException(409, "This transfer changed meanwhile; refresh and try again")
+    if t["status"] == "dispatched":
+        # Goods already left: put them back where they came from, so nothing vanishes.
+        for it in t["items"]:
+            d = int(it.get("dispatched_qty", 0))
+            if d <= 0: continue
+            product = await db.products.find_one({"id": it["product_id"]})
+            if not product: continue
+            await _apply_delta(db, it["product_id"], t["from_location"], d)
+            await _write_movement(db, actor, product, t["from_location"], d,
+                                  "transfer_cancel_return", reference_id=tid)
     await audit(db, actor, "transfer.cancel", "transfer", tid)
     return {"ok": True}
