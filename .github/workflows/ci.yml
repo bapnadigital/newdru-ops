@@ -25,7 +25,7 @@ jobs:
         run: pip install -r backend/requirements-dev.txt
       - name: Security tests (offline, in-memory database)
         working-directory: backend
-        run: pytest tests/test_security.py tests/test_unicommerce.py tests/test_store_ops.py tests/test_shopify_auth.py tests/test_shipping.py -q
+        run: pytest tests/test_security.py tests/test_unicommerce.py tests/test_store_ops.py tests/test_shopify_auth.py tests/test_shipping.py tests/test_backup.py -q
       - name: Known-vulnerable packages
         run: pip install pip-audit && pip-audit -r backend/requirements.txt
 

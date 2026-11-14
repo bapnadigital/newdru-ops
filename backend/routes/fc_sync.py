@@ -280,3 +280,43 @@ async def cron(request: Request):
     out["shiprocket"] = await refresh_active(db)
     out["shopify"] = await scheduled.shopify_orders_if_due(db)
     return out
+
+
+@internal.post("/backup")
+async def backup(request: Request):
+    """Nightly full backup, called only by the Cloudflare Worker (cron secret).
+    Returns gzipped extended-JSON of every collection; the Worker stores it in a
+    private R2 bucket in Shubham's Cloudflare account."""
+    expected = os.environ.get("CRON_SECRET")
+    if not secret_matches(request.headers.get("x-cron-token"), expected):
+        raise HTTPException(401, "Unauthorized")
+    import gzip
+    from bson import json_util
+    from fastapi.responses import Response
+    db = request.app.state.db
+    names = sorted(n for n in await db.list_collection_names()
+                   if not n.startswith("system.") and n not in {"rate_limits", "login_attempts"})
+    buf = io.BytesIO()
+    counts = {}
+    with gzip.GzipFile(fileobj=buf, mode="wb", compresslevel=6) as gz:
+        gz.write(b'{"format":"newdru-backup-v1","created_at":' + json_util.dumps(now_iso()).encode() + b',"collections":{')
+        for i, name in enumerate(names):
+            if i:
+                gz.write(b",")
+            gz.write(json_util.dumps(name).encode() + b":[")
+            n = 0
+            async for doc in db[name].find({}):
+                if n:
+                    gz.write(b",")
+                gz.write(json_util.dumps(doc).encode())
+                n += 1
+            gz.write(b"]")
+            counts[name] = n
+        gz.write(b"}}")
+    data = buf.getvalue()
+    await db.sync_runs.insert_one({"id": gen_id(), "source": "backup", "kind": "nightly", "ok": True,
+                                   "started_at": now_iso(), "finished_at": now_iso(), "by": "scheduler",
+                                   "result": {"bytes": len(data), "collections": counts}})
+    return Response(content=data, media_type="application/gzip",
+                    headers={"X-Backup-Collections": str(len(counts)),
+                             "X-Backup-Documents": str(sum(counts.values()))})

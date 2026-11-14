@@ -142,15 +142,12 @@ Marketplace and newdru.com orders keep shipping the way they do today. From the 
 4. Shiprocket → **Settings → API → Webhooks**: URL `https://mynewdru.in/api/courier-updates`, token = your `SHIPROCKET_WEBHOOK_SECRET`, turn it on. (Tracking is also checked hourly without it.)
 5. Test: B2B → any order → **Ship** → enter address and weight → **Check couriers** → **Ship now**.
 
-### Step 6 — Staff-only gate (Cloudflare Access)### Step 5e — Shiprocket (wholesale orders and store home-deliveries)
+### Step 5f — Nightly backups (automatic, nothing to do)
 
-Marketplace and newdru.com orders keep shipping the way they do today. From the app you can ship **wholesale (B2B) orders** and **store bills that need home delivery**: one click books the courier (cheapest recommended, or pick one), schedules pickup, opens the label, and tracking updates the order until it is delivered.
+Every night at 2:00 am the whole database is saved to a private Cloudflare storage bucket called **newdru-backups** (Cloudflare → R2). The last 35 days are kept; older ones are deleted automatically. Only your Cloudflare login can see them.
 
-1. Shiprocket → **Settings → API → Create API User**. Use a **different email** from your main login (e.g. `ops@newdru.com`). Save the password in your password manager.
-2. Shiprocket → **Settings → Pickup Addresses**: note the exact **nickname** of the Bhiwandi pickup (and the store's, if the store ships too).
-3. Cloudflare secrets: `SHIPROCKET_MODE=live`, `SHIPROCKET_EMAIL`, `SHIPROCKET_PASSWORD`, `SHIPROCKET_PICKUP_LOCATION` (nickname), `SHIPROCKET_PICKUP_PINCODE`, optionally `SHIPROCKET_STORE_PICKUP_LOCATION` / `SHIPROCKET_STORE_PICKUP_PINCODE`, and `SHIPROCKET_WEBHOOK_SECRET` (random password).
-4. Shiprocket → **Settings → API → Webhooks**: URL `https://mynewdru.in/api/courier-updates`, token = your `SHIPROCKET_WEBHOOK_SECRET`, turn it on. (Tracking is also checked hourly without it.)
-5. Test: B2B → any order → **Ship** → enter address and weight → **Check couriers** → **Ship now**.
+To check: Cloudflare → **R2** → **newdru-backups** → folder `newdru-ops` — you should see one file per day, e.g. `2026-11-16.json.gz`.
+To restore (only if something goes badly wrong): download that day's file and ask your developer to run `scripts/restore_backup.py` (instructions are at the top of that file). It restores into a new database first, so nothing is overwritten by mistake.
 
 ### Step 6 — Staff-only gate (Cloudflare Access)
 
@@ -158,7 +155,7 @@ Marketplace and newdru.com orders keep shipping the way they do today. From the 
 2. Name `NEWDRU Ops staff`, domain `mynewdru.in`, path empty (whole site). Session duration **1 month**.
 3. Policy: **Allow** → Include → **Emails** → list each staff member's email (and yours). Login method: **One-time PIN**.
 4. Add a second application **NEWDRU public warranty** with these paths on `mynewdru.in`, policy action **Bypass** → Include **Everyone**:
-   `warranty`, `api/public/*`, `api/warranty/public/*`, `api/pinelabs/webhook`, `static/*`, `newdru-logo.png`, `api/health`, `api/internal/cron`, `api/courier-updates`
+   `warranty`, `api/public/*`, `api/warranty/public/*`, `api/pinelabs/webhook`, `static/*`, `newdru-logo.png`, `api/health`, `api/courier-updates`
 5. Test: open mynewdru.in in a private window. You should see a Cloudflare email-code screen. `mynewdru.in/warranty` should open without it.
 
 ### Step 7 — Move the data from Emergent (one time, 10 minutes, at closing time)

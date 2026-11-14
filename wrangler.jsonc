@@ -10,7 +10,8 @@
   "routes": [
     { "pattern": "mynewdru.in", "custom_domain": true }
   ],
-  "triggers": { "crons": ["*/5 * * * *"] },
+  "triggers": { "crons": ["*/5 * * * *", "30 20 * * *"] },
+  "r2_buckets": [{ "binding": "BACKUPS", "bucket_name": "newdru-backups" }],
   "containers": [
     {
       "class_name": "NewdruApp",

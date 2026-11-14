@@ -38,5 +38,5 @@ Scanners: pip-audit (clean), Bandit (only false positives / low), yarn audit (bu
 | SEC-023 | Medium | Spreadsheet formula injection: a customer name like `=HYPERLINK(...)` from the public warranty form would run as a formula when the owner opens a CSV export | Fixed: all CSV exports neutralise formula cells |
 | SEC-024 | Medium | No request size limit: large uploads could exhaust memory | Fixed: 6 MB cap on every request |
 | SEC-025 | Medium | No Content-Security-Policy: any injected script could run and call out | Fixed: strict CSP (own scripts only), no inline scripts in the build |
-| SEC-026 | Low | Free MongoDB tier has no automatic backups | Open — upgrade to Flex before daily use |
+| SEC-026 | Low | Free MongoDB tier has no automatic backups | Mitigated — nightly backup to private R2 bucket (35 days), restore script; still upgrade to Flex for point-in-time recovery |
 | SEC-027 | Info | Offline POS queue stores unsent sales (with customer name/phone) in the till browser until it reconnects | Accepted — needed for offline billing; cleared on sync |

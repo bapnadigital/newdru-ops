@@ -8,6 +8,7 @@ import { Container, getContainer } from "@cloudflare/containers";
 
 interface Env {
   APP: DurableObjectNamespace<NewdruApp>;
+  BACKUPS?: R2Bucket; // private nightly database backups
   // Secrets (wrangler secret put NAME)
   MONGO_URL: string;
   DB_NAME: string;
@@ -96,6 +97,30 @@ export class NewdruApp extends Container<Env> {
   }
 }
 
+const BACKUP_CRON = "30 20 * * *"; // 20:30 UTC = 02:00 IST
+const KEEP_BACKUP_DAYS = 35;
+
+async function nightlyBackup(app: DurableObjectStub<NewdruApp>, env: Env) {
+  if (!env.BACKUPS || !env.CRON_SECRET) {
+    console.error("backup skipped: R2 bucket or CRON_SECRET missing");
+    return;
+  }
+  const r = await app.fetch(new Request("https://mynewdru.in/api/internal/backup", {
+    method: "POST", headers: { "X-Cron-Token": env.CRON_SECRET },
+  }));
+  if (!r.ok) { console.error("backup failed", r.status); return; }
+  const day = new Date().toISOString().slice(0, 10);
+  await env.BACKUPS.put(`newdru-ops/${day}.json.gz`, await r.arrayBuffer(), {
+    httpMetadata: { contentType: "application/gzip" },
+    customMetadata: { documents: r.headers.get("X-Backup-Documents") || "" },
+  });
+  // keep the last 35 days
+  const cutoff = Date.now() - KEEP_BACKUP_DAYS * 86400_000;
+  const list = await env.BACKUPS.list({ prefix: "newdru-ops/" });
+  const old = list.objects.filter((o) => o.uploaded.getTime() < cutoff).map((o) => o.key);
+  if (old.length) await env.BACKUPS.delete(old);
+}
+
 // One named instance so every request and the keep-warm ping hit the same app.
 const instance = (env: Env) => getContainer(env.APP, "newdru-ops-main");
 
@@ -107,13 +132,23 @@ export default {
       url.protocol = "https:";
       return Response.redirect(url.toString(), 301);
     }
+    // Scheduled jobs and backups are only ever called by this Worker's own
+    // scheduler (straight to the container), never from the internet.
+    if (url.pathname.startsWith("/api/internal/")) {
+      return new Response("Not found", { status: 404 });
+    }
     return instance(env).fetch(request);
   },
 
   // Every 5 minutes: keep the app warm, check health, and let it run any
   // scheduled jobs that are due (Unicommerce stock every 30 min, orders hourly).
-  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
+  // Once a night (02:00 IST): full database backup into the private R2 bucket.
+  async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext) {
     const app = instance(env);
+    if (event.cron === BACKUP_CRON) {
+      ctx.waitUntil(nightlyBackup(app, env));
+      return;
+    }
     ctx.waitUntil((async () => {
       try {
         const h = await app.fetch(new Request("https://mynewdru.in/api/health"));
