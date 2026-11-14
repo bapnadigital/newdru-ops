@@ -162,10 +162,10 @@ To restore (only if something goes badly wrong): download that day's file and as
 
 ### Step 7 — Move the data from Emergent (one time, 10 minutes, at closing time)
 
-1. Tell Claude "ready to move data". Claude asks Emergent's agent to run `scripts/migrate_db.py` once, copying the live database into Atlas, and shows you the counts (every collection must say OK).
+1. Tell Claude "ready to move data". Claude asks Emergent's agent to run `scripts/migrate_db.py` (first as a dry run, then with `--copy`), copying the live database into Atlas, and shows you the counts. It is safe to run after the new site has started and safe to run twice: old staff accounts replace the starter ones, and invoice numbers carry on from where Emergent stopped. The result must end with `DONE` (no problems).
 2. Right after: Atlas → **Database Access** → `newdru_app` → **Edit** → **Edit password** → autogenerate a new one → update `MONGO_URL` in Cloudflare with it. This makes the password Emergent saw useless.
 3. Log in at `https://mynewdru.in/manage-access-nd26`, check products, stock, a few customers and warranty records.
-4. Change every staff password in **Users**. Give each person their own login.
+4. Change every staff password in **Users** (or let them do it: anyone who signs in with the old shared password is forced to choose a new one). Give each person their own login.
 5. Once happy (give it a week): stop the Emergent deployment and ask Emergent to delete the app and its database.
 
 ### Step 8 — Firewall rules (Cloudflare)
