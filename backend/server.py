@@ -163,6 +163,7 @@ async def seed_admin_and_indexes():
     await db.warranty_activity.create_index("event")
     await db.warranty_claims.create_index("warranty_id")
     await db.warranty_claims.create_index("status")
+    await db.cash_closings.create_index("created_at")
     await db.sales_returns.create_index("sale_id")
     await db.sales_returns.create_index("created_at")
     await db.sales_returns.create_index("credit_note_no", unique=True)

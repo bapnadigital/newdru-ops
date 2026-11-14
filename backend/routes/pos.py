@@ -10,6 +10,7 @@ from models import (
     gen_id, now_iso,
 )
 from auth import get_current_user, require_roles, audit
+from security import rate_limit
 from routes.inventory import _apply_delta, _write_movement
 
 router = APIRouter(prefix="/pos", tags=["pos"])
@@ -491,6 +492,69 @@ async def list_returns(request: Request, sale_id: Optional[str] = None, limit: i
     db = request.app.state.db
     q = {"sale_id": sale_id} if sale_id else {}
     return await db.sales_returns.find(q, {"_id": 0}).sort("created_at", -1).to_list(max(1, min(int(limit), 500)))
+
+
+# ============================================================
+# Close the day: blind cash-up against what the till should hold
+# ============================================================
+class CashClose(BaseModel):
+    counted_cash: float = Field(ge=0, le=10_000_000)
+    keep_in_drawer: float = Field(default=0, ge=0, le=10_000_000)   # float left for tomorrow
+    note: Optional[str] = Field(default=None, max_length=300)
+
+
+async def _expected_cash(db) -> dict:
+    last = await db.cash_closings.find_one({}, {"_id": 0}, sort=[("created_at", -1)])
+    if last:
+        since, opening = last["created_at"], float(last.get("keep_in_drawer") or 0)
+    else:   # first ever close: from midnight India time today
+        from datetime import timedelta
+        ist_now = datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)
+        since = (ist_now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(hours=5, minutes=30)).isoformat()
+        opening = 0.0
+    cash_in = 0.0
+    async for s_ in db.sales.find({"created_at": {"$gt": since}}, {"_id": 0, "payments": 1}):
+        cash_in += sum(float(p.get("amount") or 0) for p in s_.get("payments", []) if p.get("method") == "cash")
+    cash_out = 0.0
+    async for r in db.sales_returns.find({"created_at": {"$gt": since}, "refund_method": "cash"}, {"_id": 0, "refund_total": 1}):
+        cash_out += float(r.get("refund_total") or 0)
+    return {"since": since, "opening_float": round(opening, 2), "cash_sales": round(cash_in, 2),
+            "cash_refunds": round(cash_out, 2), "expected": round(opening + cash_in - cash_out, 2)}
+
+
+@router.post("/cash-close")
+async def close_day(body: CashClose, request: Request,
+                    actor: dict = Depends(require_roles(ROLE_OWNER, ROLE_STORE_MANAGER))):
+    """Manager counts the drawer WITHOUT seeing the expected figure first."""
+    db = request.app.state.db
+    await rate_limit(db, f"cashclose:{actor['id']}", 5, 3600)
+    exp = await _expected_cash(db)
+    if body.keep_in_drawer > body.counted_cash:
+        raise HTTPException(400, "You can't keep more in the drawer than you counted")
+    diff = round(body.counted_cash - exp["expected"], 2)
+    doc = {"id": gen_id(), **exp, "counted_cash": round(body.counted_cash, 2),
+           "keep_in_drawer": round(body.keep_in_drawer, 2),
+           "banked": round(body.counted_cash - body.keep_in_drawer, 2),
+           "difference": diff, "note": (body.note or "").strip() or None,
+           "by_id": actor["id"], "by_name": actor["name"], "created_at": now_iso()}
+    await db.cash_closings.insert_one(dict(doc))
+    await audit(db, actor, "cash.close", "cash_closing", doc["id"],
+                {"expected": exp["expected"], "counted": doc["counted_cash"], "difference": diff})
+    doc.pop("_id", None)
+    return doc
+
+
+@router.get("/cash-closes")
+async def list_closes(request: Request, limit: int = 30,
+                      user: dict = Depends(require_roles(ROLE_OWNER, ROLE_STORE_MANAGER))):
+    db = request.app.state.db
+    return await db.cash_closings.find({}, {"_id": 0}).sort("created_at", -1).to_list(max(1, min(int(limit), 365)))
+
+
+@router.get("/cash-close/expected")
+async def expected_cash(request: Request, user: dict = Depends(require_roles(ROLE_OWNER))):
+    """Owner only: staff count blind, so they can't just type in the expected figure."""
+    return await _expected_cash(request.app.state.db)
 
 
 @router.get("/business-info")

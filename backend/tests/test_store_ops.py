@@ -270,3 +270,19 @@ def test_staff_count_waits_for_manager_approval(app):
     assert c.post(f"/api/inventory/counts/{r.json()['id']}/approve", headers=store).status_code == 200
     assert c.portal.call(qty) == 6                                     # 10 - 1 sold - 3 missing
     assert c.post(f"/api/inventory/counts/{r.json()['id']}/approve", headers=store).status_code == 400
+
+
+def test_close_the_day_blind_cash_up(app):
+    c, server = app
+    seed_product(c, server, "SKU-D", 10)
+    store = bearer(c, "store@newdru.com", SEED_PW)
+    c.post("/api/pos/sales", json=_sale("SKU-D", 100, {"method": "cash", "amount": 100}), headers=store)
+    s2 = c.post("/api/pos/sales", json=_sale("SKU-D", 100, {"method": "cash", "amount": 100}), headers=store).json()
+    c.post("/api/pos/returns", json={"sale_id": s2["id"], "items": [{"product_id": "p-SKU-D", "quantity": 1}],
+                                     "refund_method": "cash", "reason": "changed mind"}, headers=store)
+    assert c.get("/api/pos/cash-close/expected", headers=store).status_code == 403   # managers count blind
+    r = c.post("/api/pos/cash-close", json={"counted_cash": 90, "keep_in_drawer": 50}, headers=store).json()
+    assert r["expected"] == 100 and r["difference"] == -10 and r["banked"] == 40
+    owner = bearer(c, "admin@newdru.com", OWNER_PW)
+    nxt = c.get("/api/pos/cash-close/expected", headers=owner).json()
+    assert nxt["opening_float"] == 50 and nxt["expected"] == 50                       # float carried forward

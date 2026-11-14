@@ -388,3 +388,9 @@ Accounts copied over from the old Emergent app may still have the old shared pas
 ## 23. Stock counts need a manager's OK
 
 When a cashier or warehouse staff member saves a stock count, it is marked **Waiting for approval** and the stock does not change yet. The owner or the manager of that location opens **Stock Count → Recent counts**, clicks **Details** to see what was missing or extra, then **Approve** (stock is corrected) or **Reject** (nothing changes). Counts saved by a manager or the owner are applied straight away.
+
+## 24. Close the day (owner and store manager)
+
+At closing time: **Cash / Till → Close the day**. Count all the cash in the drawer, type the total, and (if you leave some change for tomorrow) how much stays in the drawer. Press **Save cash-up**.
+
+Only after saving do you see what the till expected (yesterday's float + today's cash sales − cash refunds) and whether you are short or over. The figure isn't shown before counting on purpose, so nobody can just type in the expected number. Every cash-up, with any shortfall in red, is listed underneath and in the owner's Activity Log.

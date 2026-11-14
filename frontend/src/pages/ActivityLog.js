@@ -31,6 +31,7 @@ const LABEL = {
   "inventory.count": "Stock count",
   "inventory.receive": "Goods in",
   "inventory.count_approve": "Approved a stock count",
+  "cash.close": "Closed the day (cash-up)",
   "inventory.count_reject": "Rejected a stock count",
   "user.password_change": "Changed own password",
   "product.update": "Edited a product",

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, inr, formatApiError } from "@/lib/api";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 import { IndianRupee, Coins, CreditCard, Smartphone, Receipt, TrendingUp } from "lucide-react";
 
 export default function Cash() {
@@ -114,12 +115,80 @@ export default function Cash() {
             </div>
           </div>
 
+          <CloseDay />
+
           {report.shift_start && (
             <div className="mt-4 text-xs text-slate-500">
               Shift started: {new Date(report.shift_start).toLocaleString()}
             </div>
           )}
         </>
+      )}
+    </div>
+  );
+}
+
+// Blind cash-up: count the drawer first, then see whether it matches.
+function CloseDay() {
+  const { user } = useAuth();
+  const [counted, setCounted] = useState("");
+  const [keep, setKeep] = useState("");
+  const [note, setNote] = useState("");
+  const [result, setResult] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const allowed = ["owner", "store_manager"].includes(user?.role);
+  const loadHistory = () => api.get("/pos/cash-closes", { params: { limit: 10 } }).then((r) => setHistory(r.data)).catch(() => {});
+  useEffect(() => { if (allowed) loadHistory(); /* eslint-disable-next-line */ }, [allowed]);
+  if (!allowed) return null;
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (counted === "") return toast.error("Count the cash in the drawer first");
+    setBusy(true);
+    try {
+      const { data } = await api.post("/pos/cash-close", { counted_cash: Number(counted), keep_in_drawer: Number(keep || 0), note: note || null });
+      setResult(data); setCounted(""); setKeep(""); setNote(""); loadHistory();
+    } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); }
+    setBusy(false);
+  };
+
+  const diffText = (d) => d === 0 ? "Matches exactly" : d < 0 ? `${inr(-d)} short` : `${inr(d)} extra`;
+
+  return (
+    <div className="mt-6 bg-white border border-slate-200 rounded-xl shadow-sm p-5" data-testid="close-day">
+      <div className="text-xs uppercase tracking-widest text-slate-500 font-semibold mb-1">Close the day</div>
+      <p className="text-sm text-slate-500 mb-3">Count all the cash in the drawer and type the total. You'll see whether it matches after you save.</p>
+      <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end">
+        <label className="text-xs text-slate-600">Cash counted ₹
+          <input type="number" min="0" step="1" value={counted} onChange={(e) => setCounted(e.target.value)} data-testid="close-counted"
+                 className="mt-1 w-full border border-slate-300 rounded-md px-2 py-2 text-sm" />
+        </label>
+        <label className="text-xs text-slate-600">Leave in drawer for tomorrow ₹
+          <input type="number" min="0" step="1" value={keep} onChange={(e) => setKeep(e.target.value)} placeholder="0"
+                 className="mt-1 w-full border border-slate-300 rounded-md px-2 py-2 text-sm" />
+        </label>
+        <label className="text-xs text-slate-600">Note (optional)
+          <input value={note} onChange={(e) => setNote(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-md px-2 py-2 text-sm" />
+        </label>
+        <button disabled={busy} data-testid="close-save" className="btn-brand disabled:opacity-50">{busy ? "Saving…" : "Save cash-up"}</button>
+      </form>
+      {result && (
+        <div className={`mt-3 rounded-lg p-3 text-sm ${result.difference === 0 ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"}`} data-testid="close-result">
+          Expected {inr(result.expected)} (float {inr(result.opening_float)} + cash sales {inr(result.cash_sales)} − cash refunds {inr(result.cash_refunds)}).
+          Counted {inr(result.counted_cash)}: <b>{diffText(result.difference)}</b>. Take {inr(result.banked)} to the bank.
+        </div>
+      )}
+      {history.length > 0 && (
+        <table className="w-full text-xs mt-4">
+          <thead><tr className="text-left text-slate-500"><th className="py-1">When</th><th>By</th><th className="text-right">Expected</th><th className="text-right">Counted</th><th className="text-right">Difference</th></tr></thead>
+          <tbody>{history.map((h) => (
+            <tr key={h.id} className="border-t border-slate-100">
+              <td className="py-1">{new Date(h.created_at).toLocaleString("en-IN")}</td><td>{h.by_name}</td>
+              <td className="text-right mono">{inr(h.expected)}</td><td className="text-right mono">{inr(h.counted_cash)}</td>
+              <td className={`text-right mono ${h.difference < 0 ? "text-red-600 font-semibold" : h.difference > 0 ? "text-amber-700" : "text-emerald-700"}`}>{h.difference === 0 ? "✓" : inr(h.difference)}</td>
+            </tr>))}</tbody>
+        </table>
       )}
     </div>
   );
