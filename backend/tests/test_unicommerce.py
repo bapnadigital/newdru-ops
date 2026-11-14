@@ -185,3 +185,26 @@ def test_push_preview_and_push(monkeypatch, env):
     adj = sent[0]["inventoryAdjustments"]
     assert {a["adjustmentType"] for a in adj} == {"REPLACE"}
     assert all(a["facilityCode"] == "bapnadigital" for a in adj)
+
+
+def test_mapping_import_skips_unconfirmed_rows(monkeypatch):
+    import importlib, uuid, sys, motor.motor_asyncio
+    from mongomock_motor import AsyncMongoMockClient
+    from fastapi.testclient import TestClient
+    monkeypatch.setenv("MONGO_URL", "mongodb://x"); monkeypatch.setenv("DB_NAME", f"m_{uuid.uuid4().hex[:8]}")
+    monkeypatch.setenv("JWT_SECRET", "x" * 48); monkeypatch.setenv("ADMIN_PASSWORD", "Owner-Test-Pass-2026")
+    monkeypatch.setenv("SEED_PASSWORD", "Seed-Test-Pass-2026"); monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setattr(motor.motor_asyncio, "AsyncIOMotorClient", AsyncMongoMockClient)
+    sys.modules.pop("server", None)
+    server = importlib.import_module("server")
+    with TestClient(server.app, base_url="https://t") as c:
+        async def seed():
+            await server.db.products.insert_many([{"id": "a", "sku": "A1", "name": "A"}, {"id": "b", "sku": "B1", "name": "B"}])
+        c.portal.call(seed)
+        tok = c.post("/api/auth/login", json={"email": "admin@newdru.com", "password": "Owner-Test-Pass-2026"}).json()["token"]
+        c.cookies.clear()
+        csv_text = "app_sku,unicommerce_sku,units,confidence,note\nA1,UA,1,high,\nB1,UB,1,check,guess\n"
+        r = c.post("/api/fc-sync/mapping/import", files={"file": ("m.csv", csv_text, "text/csv")},
+                   headers={"Authorization": f"Bearer {tok}"})
+        assert r.status_code == 200, r.text
+        assert r.json()["updated_products"] == 1 and r.json()["skipped_unconfirmed"] == 1

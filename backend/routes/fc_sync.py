@@ -204,10 +204,16 @@ async def import_mapping(request: Request, file: UploadFile = File(...), replace
     if "app_sku" not in cols or "unicommerce_sku" not in cols:
         raise HTTPException(400, "CSV needs columns app_sku and unicommerce_sku (and optional units)")
     links: dict = {}
+    skipped_unconfirmed = 0
     for row in reader:
         a = (row.get(cols["app_sku"]) or "").strip()
         u = (row.get(cols["unicommerce_sku"]) or "").strip()
         if not a or not u:
+            continue
+        # Rows still marked as a guess are never imported until someone confirms them.
+        conf = (row.get(cols["confidence"]) or "").strip().lower() if "confidence" in cols else ""
+        if conf in ("check", "missing", "not in app yet"):
+            skipped_unconfirmed += 1
             continue
         try:
             units = max(1, int(float(row.get(cols.get("units", ""), "") or 1)))
@@ -223,7 +229,7 @@ async def import_mapping(request: Request, file: UploadFile = File(...), replace
         await db.products.update_one({"id": p["id"]}, {"$set": {"unicommerce_skus": new, "updated_at": now_iso()}})
         updated += 1
     await audit(db, actor, "fc_sync.mapping_import", "product", None, {"updated": updated, "unknown": len(unknown)})
-    return {"updated_products": updated, "unknown_app_skus": unknown}
+    return {"updated_products": updated, "unknown_app_skus": unknown, "skipped_unconfirmed": skipped_unconfirmed}
 
 
 @router.get("/push/preview")

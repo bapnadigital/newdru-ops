@@ -38,7 +38,7 @@ export default function Integrations() {
     const fd = new FormData(); fd.append("file", mapFile);
     try {
       const { data } = await api.post("/fc-sync/mapping/import", fd, { headers: { "Content-Type": "multipart/form-data" } });
-      toast.success(`Linked ${data.updated_products} products · ${data.unknown_app_skus.length} unknown`);
+      toast.success(`Linked ${data.updated_products} products · ${data.unknown_app_skus.length} unknown${data.skipped_unconfirmed ? ` · ${data.skipped_unconfirmed} rows still marked "check" were skipped` : ""}`);
       setMapFile(null);
     } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
   };
