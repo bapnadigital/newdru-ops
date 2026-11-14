@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import api, { fmtINR, LOCATION_LABEL } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { ScanBarcode, PackagePlus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+
+const newRef = () => (window.crypto?.randomUUID ? window.crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
 
 export default function GoodsReceipt() {
   const { hasRole } = useAuth();
@@ -12,6 +15,7 @@ export default function GoodsReceipt() {
   const [scanInput, setScanInput] = useState("");
   const [lines, setLines] = useState([]); // {barcode, sku, name, cartons, units, units_per_carton}
   const [submitting, setSubmitting] = useState(false);
+  const [clientRef, setClientRef] = useState(newRef); // one per delivery, so a retry never doubles stock
   const scanRef = useRef(null);
 
   useEffect(() => { scanRef.current?.focus(); }, []);
@@ -59,11 +63,12 @@ export default function GoodsReceipt() {
           units: Number(l.units || 0),
         })),
       };
-      const { data } = await api.post("/inventory/receive", payload);
-      alert(`Received ${data.received.length} line(s).`);
-      setLines([]); setReference(""); setNotes("");
+      const { data } = await api.post("/inventory/receive", { ...payload, client_ref: clientRef });
+      toast.success(data.duplicate ? "This delivery was already saved — nothing added twice." : `Received ${data.received.length} line(s).`);
+      setLines([]); setReference(""); setNotes(""); setClientRef(newRef());
     } catch (e) {
-      alert(e.response?.data?.detail || e.message);
+      const d = e.response?.data?.detail;
+      toast.error(typeof d === "string" ? d : (e.message || "Could not save"));
     } finally { setSubmitting(false); }
   };
 

@@ -3,6 +3,7 @@ import re
 from fastapi import APIRouter, Request, HTTPException, Depends, Query
 from typing import Optional
 
+from pymongo.errors import DuplicateKeyError
 from models import (
     InventoryAdjust, LowStockThresholdSet, LOCATIONS, LOC_STORE, LOC_BHIWANDI,
     ROLE_OWNER, ROLE_STORE_MANAGER, ROLE_WH_MANAGER, STORE_ROLES,
@@ -177,6 +178,16 @@ async def receive(body: dict, request: Request,
     if not loc or not loc["editable"]:
         raise HTTPException(400, "Location not editable")
 
+    # A retry or second tab with the same delivery reference must not add stock twice.
+    client_ref = str(body.get("client_ref") or "")[:80] or None
+    if client_ref:
+        try:
+            await db.goods_receipts.insert_one({"_id": client_ref, "by": actor["id"], "created_at": now_iso(),
+                                                "location_code": loc_code, "result": None})
+        except DuplicateKeyError:
+            prev = await db.goods_receipts.find_one({"_id": client_ref}) or {}
+            return {"received": prev.get("result") or [], "duplicate": True}
+
     results = []
     for line in body.get("lines", []):
         code = line.get("barcode") or line.get("sku") or line.get("product_id")
@@ -203,6 +214,8 @@ async def receive(body: dict, request: Request,
         results.append({"sku": product["sku"], "name": product["name"],
                         "delta": delta, "quantity": new_qty})
 
+    if client_ref:
+        await db.goods_receipts.update_one({"_id": client_ref}, {"$set": {"result": results}})
     await audit(db, actor, "inventory.receive", "inventory", None,
                 {"location": loc_code, "lines": len(results), "reference": body.get("reference")})
     return {"received": results}

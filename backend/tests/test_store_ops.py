@@ -193,3 +193,16 @@ def test_cashier_cannot_do_returns(app):
     r = c.post("/api/pos/returns", json={"sale_id": "x", "items": [{"product_id": "p", "quantity": 1}],
                                          "reason": "test"}, headers=cashier)
     assert r.status_code == 403
+
+
+def test_goods_in_retry_does_not_double_stock(app):
+    c, server = app
+    seed_product(c, server, "SKU-G", 0)
+    wh = bearer(c, "warehouse@newdru.com", SEED_PW)
+    body = {"location_code": "BHIWANDI", "client_ref": "abc-123", "lines": [{"sku": "SKU-G", "units": 7}]}
+    assert c.post("/api/inventory/receive", json=body, headers=wh).status_code == 200
+    again = c.post("/api/inventory/receive", json=body, headers=wh)
+    assert again.json()["duplicate"] is True
+    async def qty():
+        return (await server.db.inventory.find_one({"product_id": "p-SKU-G", "location_code": "BHIWANDI"}))["quantity"]
+    assert c.portal.call(qty) == 7
