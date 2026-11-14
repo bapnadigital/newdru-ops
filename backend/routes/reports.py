@@ -112,7 +112,14 @@ async def sales_report(
     for k in gst_breakup:
         gst_breakup[k]["taxable"] = round(gst_breakup[k]["taxable"], 2)
         gst_breakup[k]["tax"] = round(gst_breakup[k]["tax"], 2)
+    # Credit notes (returns) in the same period, so GST can be filed net.
+    notes = await db.sales_returns.find(q, {"_id": 0, "refund_total": 1, "gst_breakup": 1}).to_list(5000)
+    cn_total = round(sum(float(n.get("refund_total") or 0) for n in notes), 2)
+    cn_tax = round(sum(float(g.get("tax") or 0) for n in notes for g in (n.get("gst_breakup") or {}).values()), 2)
     return {
+        "credit_notes": {"count": len(notes), "total": cn_total, "tax": cn_tax},
+        "net_total": round(total - cn_total, 2),
+        "net_tax": round(tax_total - cn_tax, 2),
         "count": len(sales),
         "subtotal": round(subtotal, 2),
         "tax_total": round(tax_total, 2),

@@ -286,3 +286,15 @@ def test_close_the_day_blind_cash_up(app):
     owner = bearer(c, "admin@newdru.com", OWNER_PW)
     nxt = c.get("/api/pos/cash-close/expected", headers=owner).json()
     assert nxt["opening_float"] == 50 and nxt["expected"] == 50                       # float carried forward
+
+
+def test_sales_report_nets_credit_notes(app):
+    c, server = app
+    seed_product(c, server, "SKU-N", 5)
+    owner = bearer(c, "admin@newdru.com", OWNER_PW)
+    s = c.post("/api/pos/sales", json=_sale("SKU-N", 100, {"method": "cash", "amount": 100}), headers=owner).json()
+    c.post("/api/pos/sales", json=_sale("SKU-N", 100, {"method": "cash", "amount": 100}), headers=owner)
+    c.post("/api/pos/returns", json={"sale_id": s["id"], "items": [{"product_id": "p-SKU-N", "quantity": 1}],
+                                     "reason": "damaged"}, headers=owner)
+    rep = c.get("/api/reports/sales", headers=owner).json()
+    assert rep["total"] == 200 and rep["credit_notes"]["total"] == 100 and rep["net_total"] == 100

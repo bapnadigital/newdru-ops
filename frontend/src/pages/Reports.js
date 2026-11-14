@@ -58,6 +58,12 @@ export default function Reports() {
             <div className="newdru-kpi"><div className="text-xs uppercase text-slate-500 tracking-widest">Total GST</div><div className="text-3xl font-semibold text-indigo-700 mt-1">{inr(data.tax_total)}</div></div>
             <div className="newdru-kpi"><div className="text-xs uppercase text-slate-500 tracking-widest">Grand Total</div><div className="text-3xl font-semibold text-indigo-700 mt-1">{inr(data.total)}</div></div>
           </div>
+          {data.credit_notes?.count > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm mb-6" data-testid="report-net">
+              Returns in this period: {data.credit_notes.count} credit note{data.credit_notes.count > 1 ? "s" : ""}, {inr(data.credit_notes.total)} (GST {inr(data.credit_notes.tax)}).
+              {" "}<b>Net sales {inr(data.net_total)} · net GST {inr(data.net_tax)}</b>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="newdru-kpi">
