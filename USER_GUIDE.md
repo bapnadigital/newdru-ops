@@ -353,3 +353,14 @@ Amazon, Flipkart and newdru.com orders are not shipped from this app.
 | Nightly backup | once a day, around 2 am |
 
 "Not started" just means that connection has not been set up yet. "Failing" means the last attempt gave an error; hover over the time to see it.
+
+## 18. Returns and exchanges (owner and store manager)
+
+1. **Returns** in the menu → type the bill number from the customer's receipt → **Find bill**.
+2. Enter how many of each item came back (you can't return more than was bought, or return the same item twice).
+3. Choose how the money goes back: cash from the till, UPI, card reversal, or store credit. Write a short reason (e.g. "wrong size, exchanged for L").
+4. **Confirm return** → a numbered GST credit note appears → **Print credit note** and give it to the customer.
+
+The items go straight back into store stock. Cash refunds are taken off the expected cash in the till report. Cashiers cannot do returns; this is deliberate, because returns are the most common way cash goes missing. Bills older than 30 days need the owner.
+
+For an exchange: do the return first (refund as store credit), then ring up the new item as a normal sale.

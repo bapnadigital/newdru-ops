@@ -2,7 +2,7 @@ import { NavLink } from "react-router-dom";
 import {
   LayoutDashboard, Package, Boxes, ScanBarcode, ArrowLeftRight,
   ShoppingCart, Users, LineChart, UserCog, ClipboardList, LogOut, Plug,
-  Container, Wallet, ShieldCheck, Activity, LifeBuoy, Settings2, BookOpen, ListChecks,
+  Container, Wallet, ShieldCheck, Activity, LifeBuoy, Settings2, BookOpen, ListChecks, Undo2,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import NewdruLogo from "@/components/NewdruLogo";
@@ -20,6 +20,7 @@ const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, roles: OWNER, section: "Overview" },
   // ---- Store bucket ----
   { to: "/pos", label: "Point of Sale", icon: ShoppingCart, roles: [...OWNER, ...STORE], section: "Store" },
+  { to: "/returns", label: "Returns", icon: Undo2, roles: [...OWNER, "store_manager"], section: "Store" },
   { to: "/cash", label: "Cash / Till", icon: Wallet, roles: [...OWNER, ...STORE], section: "Store" },
   // ---- Warehouse bucket ----
   { to: "/products", label: "Products", icon: Package, roles: [...OWNER, ...WAREHOUSE], section: "Warehouse" },

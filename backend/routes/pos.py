@@ -2,7 +2,8 @@
 import os
 from datetime import datetime, timezone
 from fastapi import APIRouter, Request, HTTPException, Depends
-from typing import Optional
+from typing import List, Literal, Optional
+from pydantic import BaseModel, Field
 
 from models import (
     SaleCreate, LOC_STORE, ROLE_OWNER, ROLE_STORE_MANAGER, ROLE_CASHIER,
@@ -12,6 +13,12 @@ from auth import get_current_user, require_roles, audit
 from routes.inventory import _apply_delta, _write_movement
 
 router = APIRouter(prefix="/pos", tags=["pos"])
+
+
+async def _release_ptrs(db, ptrs):
+    if ptrs:
+        await db.pinelabs_txns.update_many({"ptr_id": {"$in": ptrs}, "sale_id": {"$regex": "^pending:"}},
+                                           {"$set": {"sale_id": None}})
 
 
 async def _next_invoice_no(db) -> str:
@@ -213,12 +220,18 @@ async def create_sale(body: SaleCreate, request: Request,
             continue
         txn = await db.pinelabs_txns.find_one({"ptr_id": str(p.ptr_id)}, {"_id": 0})
         if not txn or txn.get("status") != "APPROVED":
+            await _release_ptrs(db, used_ptrs)
             raise HTTPException(400, "Terminal payment is not approved yet.")
-        if txn.get("sale_id"):
-            raise HTTPException(400, "This terminal payment is already attached to another bill.")
         txn_amount = (txn["amount_paise"] / 100.0) if txn.get("amount_paise") is not None else float(txn.get("amount") or 0)
         if abs(txn_amount - float(p.amount)) > 0.05:
+            await _release_ptrs(db, used_ptrs)
             raise HTTPException(400, "Terminal amount does not match the payment amount.")
+        # Claim it atomically: two tills can never attach the same payment.
+        claimed = await db.pinelabs_txns.find_one_and_update(
+            {"ptr_id": str(p.ptr_id), "sale_id": None}, {"$set": {"sale_id": "pending:" + invoice_no}})
+        if not claimed:
+            await _release_ptrs(db, used_ptrs)
+            raise HTTPException(400, "This terminal payment is already attached to another bill.")
         p.rrn, p.approval_code = txn.get("rrn"), txn.get("approval_code")
         p.masked_pan, p.acquirer = txn.get("masked_pan"), txn.get("acquirer")
         used_ptrs.append(str(p.ptr_id))
@@ -281,6 +294,7 @@ async def list_sales(
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
     cashier_id: Optional[str] = None,
+    invoice_no: Optional[str] = None,
     limit: int = 200,
     user: dict = Depends(require_roles(ROLE_OWNER, ROLE_STORE_MANAGER, ROLE_CASHIER)),
 ):
@@ -291,6 +305,7 @@ async def list_sales(
         if from_date: q["created_at"]["$gte"] = from_date
         if to_date: q["created_at"]["$lte"] = to_date
     if cashier_id: q["cashier_id"] = cashier_id
+    if invoice_no: q["invoice_no"] = str(invoice_no).strip().upper()[:40]
     if user["role"] == ROLE_CASHIER:
         q["cashier_id"] = user["id"]
     limit = max(1, min(int(limit), 1000))
@@ -325,7 +340,14 @@ async def shift_report(request: Request, cashier_id: Optional[str] = None,
         for p in s.get("payments", []):
             by_method[p["method"]] = by_method.get(p["method"], 0) + float(p["amount"])
         total += float(s.get("total", 0))
+    refunds = await db.sales_returns.find({"by_id": target_id, "created_at": {"$gte": start_of_day}},
+                                          {"_id": 0, "refund_total": 1, "refund_method": 1}).to_list(1000)
+    refund_by_method: dict = {}
+    for r in refunds:
+        refund_by_method[r["refund_method"]] = round(refund_by_method.get(r["refund_method"], 0) + float(r["refund_total"]), 2)
     return {
+        "refunds": refund_by_method,
+        "cash_in_drawer": round(by_method.get("cash", 0) - refund_by_method.get("cash", 0), 2),
         "cashier_id": target_id, "date": start_of_day,
         "sale_count": len(sales), "order_count": len(sales),
         "shift_start": start_of_day,
@@ -333,6 +355,122 @@ async def shift_report(request: Request, cashier_id: Optional[str] = None,
         "by_method": {k: round(v, 2) for k, v in by_method.items()},
         "sales": sales[:100],
     }
+
+
+# ============================================================
+# Returns / exchanges -> GST credit note, stock back to the store
+# ============================================================
+class ReturnLine(BaseModel):
+    product_id: str
+    quantity: int = Field(gt=0, le=10000)
+
+
+class SaleReturn(BaseModel):
+    sale_id: str
+    items: List[ReturnLine] = Field(min_length=1, max_length=200)
+    refund_method: Literal["cash", "card", "upi", "credit_note"] = "cash"
+    reason: str = Field(min_length=3, max_length=300)
+
+
+async def _next_credit_note_no(db) -> str:
+    prefix = os.environ.get("INVOICE_PREFIX", "NW")
+    year = datetime.now(timezone.utc).strftime("%y")
+    c = await db.counters.find_one_and_update({"_id": f"credit_note_{year}"}, {"$inc": {"seq": 1}},
+                                              upsert=True, return_document=True)
+    return f"{prefix}-CN-{year}-{(c or {}).get('seq', 1):05d}"
+
+
+@router.post("/returns")
+async def create_return(body: SaleReturn, request: Request,
+                        actor: dict = Depends(require_roles(ROLE_OWNER, ROLE_STORE_MANAGER))):
+    """Customer brings items back. Only owner / store manager (not cashiers)."""
+    db = request.app.state.db
+    sale = await db.sales.find_one({"id": body.sale_id}, {"_id": 0})
+    if not sale:
+        raise HTTPException(404, "Bill not found")
+    days = int(os.environ.get("RETURN_WINDOW_DAYS", "30"))
+    try:
+        sold_at = datetime.fromisoformat(sale["created_at"].replace("Z", "+00:00"))
+        if sold_at.tzinfo is None:
+            sold_at = sold_at.replace(tzinfo=timezone.utc)
+        too_old = (datetime.now(timezone.utc) - sold_at).days > days
+    except (KeyError, ValueError):
+        too_old = False
+    if too_old and actor["role"] != ROLE_OWNER:
+        raise HTTPException(403, f"Bill is older than {days} days — only the owner can accept this return")
+
+    lines = {it["product_id"]: it for it in sale["items"]}
+    gross_lines = sum(float(it.get("line_total") or 0) for it in sale["items"]) or 1.0
+    ratio = float(sale.get("total") or 0) / gross_lines          # share of any bill discount
+    want: dict = {}
+    for r in body.items:
+        want[r.product_id] = want.get(r.product_id, 0) + r.quantity
+    out_items, refund, gst = [], 0.0, {}
+    for pid, q in want.items():
+        it = lines.get(pid)
+        if not it:
+            raise HTTPException(400, "An item is not on this bill")
+        left = int(it["quantity"]) - int(it.get("returned_qty") or 0)
+        if q > left:
+            raise HTTPException(400, f"Only {left} of '{it['name']}' can still be returned on this bill")
+        per_unit = float(it.get("line_total") or 0) / int(it["quantity"]) * ratio
+        per_tax = float(it.get("tax_amount") or 0) / int(it["quantity"]) * ratio
+        amt, tax = round(per_unit * q, 2), round(per_tax * q, 2)
+        refund += amt
+        k = f"{float(it.get('gst_rate') or 0):.2f}"
+        gst.setdefault(k, {"taxable": 0.0, "tax": 0.0})
+        gst[k]["taxable"] = round(gst[k]["taxable"] + amt - tax, 2)
+        gst[k]["tax"] = round(gst[k]["tax"] + tax, 2)
+        out_items.append({"product_id": pid, "sku": it.get("sku"), "name": it.get("name"),
+                          "quantity": q, "refund": amt, "tax_amount": tax})
+
+    # Claim atomically against the bill's current state so two returns can't over-return.
+    ver = int(sale.get("returns_version") or 0)
+    new_items = []
+    for it in sale["items"]:
+        n = dict(it)
+        if it["product_id"] in want:
+            n["returned_qty"] = int(it.get("returned_qty") or 0) + want[it["product_id"]]
+            want[it["product_id"]] = 0   # only the first matching line takes it
+        new_items.append(n)
+    ok = await db.sales.find_one_and_update(
+        {"id": sale["id"], "$or": [{"returns_version": ver}, {"returns_version": {"$exists": False}}] if ver == 0
+         else [{"returns_version": ver}]},
+        {"$set": {"items": new_items, "returns_version": ver + 1},
+         "$inc": {"refunded_total": round(refund, 2)}})
+    if not ok:
+        raise HTTPException(409, "This bill was just changed; open it again and retry")
+
+    now = now_iso()
+    cn = {
+        "id": gen_id(), "credit_note_no": await _next_credit_note_no(db),
+        "sale_id": sale["id"], "invoice_no": sale["invoice_no"],
+        "customer_id": sale.get("customer_id"), "customer_name": sale.get("customer_name"),
+        "items": out_items, "refund_total": round(refund, 2), "gst_breakup": gst,
+        "refund_method": body.refund_method, "reason": body.reason.strip(),
+        "by_id": actor["id"], "by_name": actor["name"], "location_code": LOC_STORE,
+        "created_at": now,
+    }
+    await db.sales_returns.insert_one(cn)
+    for it in out_items:
+        product = await db.products.find_one({"id": it["product_id"]})
+        if not product: continue
+        await _apply_delta(db, it["product_id"], LOC_STORE, it["quantity"])
+        await _write_movement(db, actor, product, LOC_STORE, it["quantity"], "sale_return",
+                              reason=body.reason.strip(), reference_id=cn["id"])
+    await audit(db, actor, "sale.return", "sale", sale["id"],
+                {"credit_note_no": cn["credit_note_no"], "refund": cn["refund_total"],
+                 "method": body.refund_method})
+    cn.pop("_id", None)
+    return cn
+
+
+@router.get("/returns")
+async def list_returns(request: Request, sale_id: Optional[str] = None, limit: int = 100,
+                       user: dict = Depends(require_roles(ROLE_OWNER, ROLE_STORE_MANAGER))):
+    db = request.app.state.db
+    q = {"sale_id": sale_id} if sale_id else {}
+    return await db.sales_returns.find(q, {"_id": 0}).sort("created_at", -1).to_list(max(1, min(int(limit), 500)))
 
 
 @router.get("/business-info")

@@ -163,6 +163,9 @@ async def seed_admin_and_indexes():
     await db.warranty_activity.create_index("event")
     await db.warranty_claims.create_index("warranty_id")
     await db.warranty_claims.create_index("status")
+    await db.sales_returns.create_index("sale_id")
+    await db.sales_returns.create_index("created_at")
+    await db.sales_returns.create_index("credit_note_no", unique=True)
     # Lookups the app does on every bill / order / shipment
     for coll, key in (("sales", "id"), ("sales", "customer_id"), ("sales", "items.product_id"),
                       ("b2b_orders", "id"), ("shipments", "id"), ("warranty_claims", "id"),

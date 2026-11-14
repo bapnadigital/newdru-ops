@@ -11,6 +11,7 @@ import POS from "@/pages/POS";
 import Cash from "@/pages/Cash";
 import Receive from "@/pages/Receive";
 import StockCount from "@/pages/StockCount";
+import Returns from "@/pages/Returns";
 import Transfers from "@/pages/Transfers";
 import StockLedger from "@/pages/StockLedger";
 import Customers from "@/pages/Customers";
@@ -60,6 +61,7 @@ function App() {
             <Route path="/products" element={<ProtectedRoute roles={[...OWNER, ...WAREHOUSE]}><Products /></ProtectedRoute>} />
             <Route path="/inventory" element={<ProtectedRoute roles={[...OWNER, ...STORE, ...WAREHOUSE]}><Inventory /></ProtectedRoute>} />
             <Route path="/receive" element={<ProtectedRoute roles={[...OWNER, ...STORE, ...WAREHOUSE]}><Receive /></ProtectedRoute>} />
+            <Route path="/returns" element={<ProtectedRoute roles={[...OWNER, "store_manager"]}><Returns /></ProtectedRoute>} />
             <Route path="/stock-count" element={<ProtectedRoute roles={[...OWNER, ...STORE, ...WAREHOUSE]}><StockCount /></ProtectedRoute>} />
             <Route path="/transfers" element={<ProtectedRoute roles={[...OWNER, ...WAREHOUSE]}><Transfers /></ProtectedRoute>} />
             <Route path="/movements" element={<ProtectedRoute roles={[...OWNER, "warehouse_manager"]}><StockLedger /></ProtectedRoute>} />

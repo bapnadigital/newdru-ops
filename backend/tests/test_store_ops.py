@@ -154,3 +154,42 @@ def test_cancel_dispatched_transfer_returns_stock(app):
     assert _q(c, server, "BHIWANDI") == 90
     assert c.post("/api/stock/transfers/t1/cancel", headers=owner).status_code == 200
     assert _q(c, server, "BHIWANDI") == 100
+
+
+def test_returns_credit_note_restock_and_limits(app):
+    c, server = app
+    seed_product(c, server, "SKU-R", 10)
+    store = bearer(c, "store@newdru.com", SEED_PW)
+    sale = {"items": [{"product_id": "p-SKU-R", "sku": "SKU-R", "name": "Thing", "quantity": 3,
+                       "unit_price": 118, "gst_rate": 18, "discount": 0}],
+            "payments": [{"method": "cash", "amount": 254}], "cart_discount": 100}
+    s = c.post("/api/pos/sales", json=sale, headers=store)
+    assert s.status_code == 200, s.text
+    sid = s.json()["id"]
+    r = c.post("/api/pos/returns", json={"sale_id": sid, "items": [{"product_id": "p-SKU-R", "quantity": 2}],
+                                         "refund_method": "cash", "reason": "size issue"}, headers=store)
+    assert r.status_code == 200, r.text
+    cn = r.json()
+    assert cn["credit_note_no"].startswith("NW-CN-")
+    assert abs(cn["refund_total"] - 254 * 2 / 3) < 0.05      # bill discount shared fairly
+    async def qty():
+        return (await server.db.inventory.find_one({"product_id": "p-SKU-R", "location_code": "STORE"}))["quantity"]
+    assert c.portal.call(qty) == 9                           # 10 - 3 + 2
+    over = c.post("/api/pos/returns", json={"sale_id": sid, "items": [{"product_id": "p-SKU-R", "quantity": 2}],
+                                            "reason": "again"}, headers=store)
+    assert over.status_code == 400                           # only 1 left
+    shift = c.get("/api/pos/shift/report", headers=store).json()
+    assert shift["refunds"]["cash"] == cn["refund_total"]
+
+
+def test_cashier_cannot_do_returns(app):
+    c, server = app
+    async def add_cashier():
+        from auth import hash_password
+        await server.db.users.insert_one({"id": "cash1", "email": "cashier@newdru.com", "name": "C", "role": "cashier",
+                                          "active": True, "password_hash": hash_password(SEED_PW)})
+    c.portal.call(add_cashier)
+    cashier = bearer(c, "cashier@newdru.com", SEED_PW)
+    r = c.post("/api/pos/returns", json={"sale_id": "x", "items": [{"product_id": "p", "quantity": 1}],
+                                         "reason": "test"}, headers=cashier)
+    assert r.status_code == 403
