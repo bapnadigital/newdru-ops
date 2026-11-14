@@ -185,8 +185,14 @@ async def receive(body: dict, request: Request,
         )
         if not product:
             results.append({"code": code, "error": "unknown"}); continue
-        cartons = int(line.get("cartons") or 0)
-        units_extra = int(line.get("units") or 0)
+        try:
+            cartons = int(line.get("cartons") or 0)
+            units_extra = int(line.get("units") or 0)
+        except (TypeError, ValueError):
+            raise HTTPException(400, "Cartons and units must be whole numbers")
+        # Goods-in only adds stock; removals go through Adjust (with a reason) or Stock Count.
+        if cartons < 0 or units_extra < 0 or cartons > 100_000 or units_extra > 1_000_000:
+            raise HTTPException(400, "Goods-in quantities must be between 0 and 100,000 cartons")
         upc = int(product.get("units_per_carton") or 1)
         delta = cartons * upc + units_extra
         if delta == 0: continue

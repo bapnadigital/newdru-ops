@@ -1,3 +1,4 @@
+import ShipModal from "@/components/ShipModal";
 import { useEffect, useMemo, useState } from "react";
 import { api, fmtINR, formatApiError } from "@/lib/api";
 import { toast } from "sonner";
@@ -25,6 +26,9 @@ export default function B2B() {
 }
 
 function Orders() {
+  const [shipping, setShipping] = useState(null);
+  const [shipOn, setShipOn] = useState(false);
+  useEffect(() => { api.get("/shipping/config").then((r) => setShipOn(r.data.mode === "live" && r.data.configured)).catch(() => {}); }, []);
   const [orders, setOrders] = useState([]);
   const [status, setStatus] = useState("");
   const [creating, setCreating] = useState(false);
@@ -80,6 +84,14 @@ function Orders() {
                     {o.status === "confirmed" && <button onClick={() => act(o.id, "dispatch")} className="px-2 py-1 border border-slate-300 rounded text-xs flex items-center gap-1"><Truck size={12} />Dispatch</button>}
                     {(o.status === "dispatched" || o.status === "confirmed") && !o.invoice_no && <button onClick={() => act(o.id, "invoice")} className="px-2 py-1 bg-indigo-600 text-white rounded text-xs flex items-center gap-1"><FileText size={12} />Invoice</button>}
                     {o.outstanding > 0 && o.invoice_no && <PaymentButton orderId={o.id} onDone={load} />}
+                    {shipOn && o.status !== "cancelled" && !o.shipment?.awb && (
+                      <button data-testid={`b2b-ship-${o.order_no}`} onClick={() => setShipping(o)} className="px-2 py-1 border border-slate-300 rounded text-xs flex items-center gap-1"><Truck size={12} />Ship</button>
+                    )}
+                    {o.shipment?.awb && (
+                      <a href={o.shipment.label_url || "#"} target="_blank" rel="noreferrer" className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs" title={o.shipment.courier}>
+                        AWB {o.shipment.awb} · {o.shipment.status}
+                      </a>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -90,6 +102,9 @@ function Orders() {
       </div>
 
       {creating && <OrderModal onClose={() => setCreating(false)} onSaved={() => { setCreating(false); load(); }} />}
+      {shipping && <ShipModal kind="b2b" refId={shipping.id} refNo={shipping.order_no}
+                              defaults={{ name: shipping.customer_name }}
+                              onClose={() => setShipping(null)} onDone={() => { setShipping(null); load(); }} />}
     </div>
   );
 }

@@ -273,4 +273,10 @@ async def cron(request: Request):
     expected = os.environ.get("CRON_SECRET")
     if not secret_matches(request.headers.get("x-cron-token"), expected):
         raise HTTPException(401, "Unauthorized")
-    return {"unicommerce": await ucs.run_due(request.app.state.db)}
+    db = request.app.state.db
+    out = {"unicommerce": await ucs.run_due(db)}
+    from routes.shipping import refresh_active
+    from services import scheduled
+    out["shiprocket"] = await refresh_active(db)
+    out["shopify"] = await scheduled.shopify_orders_if_due(db)
+    return out

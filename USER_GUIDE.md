@@ -331,3 +331,12 @@ You won't see the system quantity; that is on purpose. The owner sees the differ
 4. If the customer cancels, press **Cancel** in the panel.
 
 Never type a card/UPI payment by hand — the app will refuse it once the machine is live.
+
+
+## 16. Shipping with Shiprocket
+
+**Wholesale orders (owner):** B2B → order → **Ship** → check the address, enter weight and box size → **Check couriers** (cheapest first) → **Ship now**. The label opens in a new tab; print it and stick it on the box. The order shows the AWB and updates to *delivered* on its own.
+
+**Store home delivery (owner / store manager):** after completing a bill, press **Home delivery (Shiprocket)** under "Sale complete" and do the same.
+
+Amazon, Flipkart and newdru.com orders are not shipped from this app.

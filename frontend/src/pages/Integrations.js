@@ -9,6 +9,7 @@ export default function Integrations() {
   const [pl, setPL] = useState(null);
   const [fc, setFC] = useState(null);
   const [msg, setMsg] = useState(null);
+  const [ship, setShip] = useState(null);
   const [file, setFile] = useState(null);
   const [fcLoc, setFCLoc] = useState("AMAZON_FC");
   const [uploading, setUploading] = useState(false);
@@ -62,6 +63,7 @@ export default function Integrations() {
     api.get("/pinelabs/config").then(r => setPL(r.data)).catch(() => setPL({ mode: "error" }));
     api.get("/fc-sync/config").then(r => setFC(r.data)).catch(() => setFC({ mode: "error" }));
     api.get("/messaging/config").then(r => setMsg(r.data)).catch(() => setMsg({}));
+    api.get("/shipping/config").then(r => setShip(r.data)).catch(() => setShip({ mode: "error" }));
   };
   useEffect(() => { load(); }, []);
 
@@ -144,6 +146,16 @@ export default function Integrations() {
             <button data-testid="fc-csv-upload" onClick={uploadCsv} disabled={uploading || !file} className="btn-brand disabled:opacity-50 flex items-center gap-1"><Upload size={14} />Upload</button>
           </div>
           <div className="text-xs text-slate-500 mt-2">CSV format: <span className="font-mono">sku,quantity</span> — unknown SKUs are skipped and reported.</div>
+        </Card>
+
+        <Card icon={<ShoppingBag size={18} />} title="Shiprocket" mode={ship?.mode}
+              subtitle="Ship wholesale orders and store home-deliveries. Marketplace and newdru.com orders are not shipped from here.">
+          <div className="text-xs text-slate-600 mt-2">
+            <Row k="API user" v={ship?.configured ? "set" : "not set — SHIPROCKET_EMAIL / PASSWORD"} />
+            <Row k="Pickup (Bhiwandi)" v={ship?.pickup?.location ? `${ship.pickup.location} · ${ship.pickup.pincode || "no pincode"}` : "not set"} />
+            <Row k="Pickup (Store)" v={ship?.store_pickup?.location ? `${ship.store_pickup.location} · ${ship.store_pickup.pincode || ""}` : "uses Bhiwandi"} />
+            <Row k="Tracking webhook" v={ship?.webhook_secret_set ? "on" : "off — set SHIPROCKET_WEBHOOK_SECRET"} />
+          </div>
         </Card>
 
         <Card icon={<MessageSquare size={18} />} title="Gupshup WhatsApp" mode={msg?.gupshup?.mode}

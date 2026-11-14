@@ -34,6 +34,7 @@ from routes.planner import router as planner_router
 from routes.warranty import router as warranty_router
 from routes.shopify_sync import router as shopify_router
 from routes.help import router as help_router
+from routes.shipping import router as shipping_router, hook as shipping_hook_router
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("newdru")
@@ -90,6 +91,8 @@ api_router.include_router(planner_router)
 api_router.include_router(warranty_router)
 api_router.include_router(shopify_router)
 api_router.include_router(help_router)
+api_router.include_router(shipping_router)
+api_router.include_router(shipping_hook_router)
 
 app.include_router(api_router)
 
@@ -147,6 +150,8 @@ async def seed_admin_and_indexes():
     await db.rate_limits.create_index("expires_at", expireAfterSeconds=0)
     await db.sync_runs.create_index([("source", 1), ("kind", 1), ("finished_at", -1)])
     await db.unicommerce_orders.create_index("code", unique=True)
+    await db.shipments.create_index([("kind", 1), ("ref_id", 1)])
+    await db.shipments.create_index("awb", sparse=True)
     # Warranty indexes
     await db.warranty_registrations.create_index("warranty_id", unique=True, sparse=True)
     await db.warranty_registrations.create_index("email")

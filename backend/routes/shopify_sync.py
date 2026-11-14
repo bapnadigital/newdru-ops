@@ -42,7 +42,11 @@ async def sync_orders(request: Request, since_hours: int = 24, limit: int = 50,
     """Manual pull of recent orders. Creates warranty 'purchased' activity events
     per line item so admins can see purchases in the User Activities feed.
     """
-    db = request.app.state.db
+    return await pull_orders(request.app.state.db, since_hours, limit, actor)
+
+
+async def pull_orders(db, since_hours: int = 24, limit: int = 50, actor: dict | None = None) -> dict:
+    """Shared by the button and the hourly scheduler."""
     since = (datetime.now(timezone.utc) - timedelta(hours=int(since_hours))).isoformat()
     res = await fetch_orders(db, since_iso=since, limit=limit)
     if not res.get("ok"):
@@ -82,6 +86,10 @@ async def sync_orders(request: Request, since_hours: int = 24, limit: int = 50,
                 "customer_email": email, "customer_phone": phone,
                 "created_at": o.get("created_at") or now,
             })
+    await db.sync_runs.insert_one({"id": gen_id(), "source": "shopify", "kind": "orders", "ok": True,
+                                   "started_at": now, "finished_at": now_iso(),
+                                   "by": (actor or {}).get("email") or "scheduler",
+                                   "result": {"orders": len(orders), "matched": matched, "unknown": unknown}})
     await audit(db, actor, "shopify.sync.orders", "shopify", None,
                 {"since_hours": since_hours, "matched": matched, "unknown": unknown,
                  "count": len(orders)})

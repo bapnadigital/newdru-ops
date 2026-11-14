@@ -132,13 +132,33 @@ Once the machine is live, the app **refuses** a card/UPI bill unless the money r
 - You see each count's missing / extra units on the same page. Suggested routine: full store count every Sunday night, and a quick count of the top 10 products every evening.
 - Before the first push to Unicommerce, do a full count of Bhiwandi too, so marketplaces get real numbers.
 
-### Step 6 — Staff-only gate (Cloudflare Access)### Step 6 — Staff-only gate (Cloudflare Access)
+### Step 5e — Shiprocket (wholesale orders and store home-deliveries)
+
+Marketplace and newdru.com orders keep shipping the way they do today. From the app you can ship **wholesale (B2B) orders** and **store bills that need home delivery**: one click books the courier (cheapest recommended, or pick one), schedules pickup, opens the label, and tracking updates the order until it is delivered.
+
+1. Shiprocket → **Settings → API → Create API User**. Use a **different email** from your main login (e.g. `ops@newdru.com`). Save the password in your password manager.
+2. Shiprocket → **Settings → Pickup Addresses**: note the exact **nickname** of the Bhiwandi pickup (and the store's, if the store ships too).
+3. Cloudflare secrets: `SHIPROCKET_MODE=live`, `SHIPROCKET_EMAIL`, `SHIPROCKET_PASSWORD`, `SHIPROCKET_PICKUP_LOCATION` (nickname), `SHIPROCKET_PICKUP_PINCODE`, optionally `SHIPROCKET_STORE_PICKUP_LOCATION` / `SHIPROCKET_STORE_PICKUP_PINCODE`, and `SHIPROCKET_WEBHOOK_SECRET` (random password).
+4. Shiprocket → **Settings → API → Webhooks**: URL `https://mynewdru.in/api/courier-updates`, token = your `SHIPROCKET_WEBHOOK_SECRET`, turn it on. (Tracking is also checked hourly without it.)
+5. Test: B2B → any order → **Ship** → enter address and weight → **Check couriers** → **Ship now**.
+
+### Step 6 — Staff-only gate (Cloudflare Access)### Step 5e — Shiprocket (wholesale orders and store home-deliveries)
+
+Marketplace and newdru.com orders keep shipping the way they do today. From the app you can ship **wholesale (B2B) orders** and **store bills that need home delivery**: one click books the courier (cheapest recommended, or pick one), schedules pickup, opens the label, and tracking updates the order until it is delivered.
+
+1. Shiprocket → **Settings → API → Create API User**. Use a **different email** from your main login (e.g. `ops@newdru.com`). Save the password in your password manager.
+2. Shiprocket → **Settings → Pickup Addresses**: note the exact **nickname** of the Bhiwandi pickup (and the store's, if the store ships too).
+3. Cloudflare secrets: `SHIPROCKET_MODE=live`, `SHIPROCKET_EMAIL`, `SHIPROCKET_PASSWORD`, `SHIPROCKET_PICKUP_LOCATION` (nickname), `SHIPROCKET_PICKUP_PINCODE`, optionally `SHIPROCKET_STORE_PICKUP_LOCATION` / `SHIPROCKET_STORE_PICKUP_PINCODE`, and `SHIPROCKET_WEBHOOK_SECRET` (random password).
+4. Shiprocket → **Settings → API → Webhooks**: URL `https://mynewdru.in/api/courier-updates`, token = your `SHIPROCKET_WEBHOOK_SECRET`, turn it on. (Tracking is also checked hourly without it.)
+5. Test: B2B → any order → **Ship** → enter address and weight → **Check couriers** → **Ship now**.
+
+### Step 6 — Staff-only gate (Cloudflare Access)
 
 1. Cloudflare → **Zero Trust** (free plan) → **Access** → **Applications** → **Add an application** → **Self-hosted**.
 2. Name `NEWDRU Ops staff`, domain `mynewdru.in`, path empty (whole site). Session duration **1 month**.
 3. Policy: **Allow** → Include → **Emails** → list each staff member's email (and yours). Login method: **One-time PIN**.
 4. Add a second application **NEWDRU public warranty** with these paths on `mynewdru.in`, policy action **Bypass** → Include **Everyone**:
-   `warranty`, `api/public/*`, `api/warranty/public/*`, `api/pinelabs/webhook`, `static/*`, `newdru-logo.png`, `api/health`, `api/internal/cron`
+   `warranty`, `api/public/*`, `api/warranty/public/*`, `api/pinelabs/webhook`, `static/*`, `newdru-logo.png`, `api/health`, `api/internal/cron`, `api/courier-updates`
 5. Test: open mynewdru.in in a private window. You should see a Cloudflare email-code screen. `mynewdru.in/warranty` should open without it.
 
 ### Step 7 — Move the data from Emergent (one time, 10 minutes, at closing time)

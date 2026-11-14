@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, inr, formatApiError } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
+import ShipModal from "@/components/ShipModal";
 import { toast } from "sonner";
 import { ScanBarcode, Trash2, Plus, Minus, Printer, IndianRupee, LayoutGrid, X, ImageOff } from "lucide-react";
 import { v4 as uuidv4 } from "@/lib/uuid";
@@ -30,6 +31,9 @@ export default function POS() {
   const grandRef = useRef(0);
   const [processing, setProcessing] = useState(false);
   const [lastSale, setLastSale] = useState(null);
+  const [shipSale, setShipSale] = useState(null);
+  const [shipOn, setShipOn] = useState(false);
+  useEffect(() => { if (!["owner", "store_manager"].includes(user?.role)) return; api.get("/shipping/config").then((r) => setShipOn(r.data.mode === "live" && r.data.configured)).catch(() => {}); }, []);
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [overrideCreds, setOverrideCreds] = useState({ email: "admin@newdru.com", password: "", reason: "" });
   const [overrideError, setOverrideError] = useState("");
@@ -576,8 +580,16 @@ export default function POS() {
             <div className="bg-emerald-50 border border-emerald-200 rounded-md p-3">
               <div className="text-sm text-emerald-900">Sale complete · <span className="mono font-semibold">{lastSale.invoice_no}</span></div>
               <div className="text-xs text-emerald-700 mt-1">Total: {inr(lastSale.total)}</div>
+              {shipOn && ["owner", "store_manager"].includes(user.role) && !lastSale.shipment && (
+                <button data-testid="pos-home-delivery" onClick={() => setShipSale(lastSale)} className="mt-2 text-xs border border-emerald-300 rounded px-2 py-1 bg-white">Home delivery (Shiprocket)</button>
+              )}
+              {lastSale.shipment?.awb && <div className="text-xs text-emerald-800 mt-1">Shipped · AWB {lastSale.shipment.awb}</div>}
             </div>
           )}
+          {shipSale && <ShipModal kind="sale" refId={shipSale.id} refNo={shipSale.invoice_no}
+                                  defaults={{ name: shipSale.customer_name || "", phone: custPhone || "" }}
+                                  onClose={() => setShipSale(null)}
+                                  onDone={(d) => { setLastSale({ ...shipSale, shipment: { awb: d.awb } }); setShipSale(null); }} />}
         </div>
       </div>
 
