@@ -12,10 +12,43 @@ import httpx
 
 log = logging.getLogger("newdru.shopify")
 
-API_VERSION = "2024-10"
+API_VERSION = os.environ.get("SHOPIFY_API_VERSION", "2026-10")
+
+# Since Jan 2026 Shopify apps are made in the Dev Dashboard. For our own store we
+# use the client credentials grant: Client ID + Client secret -> a 24-hour token,
+# fetched and renewed automatically. A static SHOPIFY_ACCESS_TOKEN still works.
+_TOKEN_CACHE: dict = {}
 
 
-async def _get_settings(db) -> dict:
+async def _client_credentials_token(domain: str) -> str:
+    cid = (os.environ.get("SHOPIFY_CLIENT_ID") or "").strip()
+    secret = (os.environ.get("SHOPIFY_CLIENT_SECRET") or "").strip()
+    if not (cid and secret and domain):
+        return ""
+    import time
+    hit = _TOKEN_CACHE.get(domain)
+    if hit and hit[1] - time.time() > 120:
+        return hit[0]
+    d = domain.replace("https://", "").rstrip("/")
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as c:
+            r = await c.post(f"https://{d}/admin/oauth/access_token",
+                             data={"grant_type": "client_credentials", "client_id": cid, "client_secret": secret},
+                             headers={"Content-Type": "application/x-www-form-urlencoded"})
+        if r.status_code != 200:
+            log.warning("shopify client-credentials token failed: HTTP %s", r.status_code)
+            return ""
+        data = r.json()
+        tok = data.get("access_token") or ""
+        if tok:
+            _TOKEN_CACHE[domain] = (tok, time.time() + int(data.get("expires_in") or 3600))
+        return tok
+    except Exception as e:  # never raise to callers
+        log.warning("shopify client-credentials token error: %s", e)
+        return ""
+
+
+async def _raw_settings(db) -> dict:
     doc = await db.settings.find_one({"_id": "shopify"}) or {}
     return {
         "shop_domain": (doc.get("shop_domain") or os.environ.get("SHOPIFY_SHOP_DOMAIN") or "").strip(),
@@ -26,15 +59,27 @@ async def _get_settings(db) -> dict:
     }
 
 
+async def _get_settings(db) -> dict:  # noqa: F811 - wraps the raw settings with a live token
+    s = await _raw_settings(db)
+    if not s["access_token"]:
+        s["access_token"] = await _client_credentials_token(s["shop_domain"])
+        s["auth"] = "client_credentials" if s["access_token"] else "none"
+    else:
+        s["auth"] = "static_token"
+    return s
+
+
 async def get_config(db) -> dict:
-    s = await _get_settings(db)
+    s = await _raw_settings(db)
+    has_cc = bool(os.environ.get("SHOPIFY_CLIENT_ID") and os.environ.get("SHOPIFY_CLIENT_SECRET"))
     return {
         "mode": s["mode"],
         "shop_domain": s["shop_domain"] or None,
         "location_id_set": bool(s["location_id"]),
-        "access_token_set": bool(s["access_token"]),
+        "access_token_set": bool(s["access_token"]) or has_cc,
+        "client_credentials_set": has_cc,
         "webhook_secret_set": bool(s["webhook_secret"]),
-        "ready": bool(s["shop_domain"] and s["access_token"]) and s["mode"] != "disabled",
+        "ready": bool(s["shop_domain"] and (s["access_token"] or has_cc)) and s["mode"] != "disabled",
     }
 
 
