@@ -1,2 +1,3 @@
 # Fake test value "shpat_TEST123" in an old test (not a real Shopify token)
 6e225c93774e5c6935b59a1a379881c48d8651c8:backend/tests/test_warranty.py:generic-api-key:282
+30f1c19dc60e804551fe9d7bce22a7bbe6acf986:backend/tests/test_backup.py:generic-api-key:56

@@ -10,6 +10,8 @@ from bson import json_util
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+OWNER_PW = "Owner-Test-Pass-2026"
+SEED_PW = "Seed-Test-Pass-2026"
 
 
 @pytest.fixture()
@@ -19,8 +21,8 @@ def app(monkeypatch):
     monkeypatch.setenv("MONGO_URL", "mongodb://x")
     monkeypatch.setenv("DB_NAME", f"bk_{uuid.uuid4().hex[:8]}")
     monkeypatch.setenv("JWT_SECRET", "x" * 48)
-    monkeypatch.setenv("ADMIN_PASSWORD", "Owner-Test-Pass-2026")
-    monkeypatch.setenv("SEED_PASSWORD", "Seed-Test-Pass-2026")
+    monkeypatch.setenv("ADMIN_PASSWORD", OWNER_PW)
+    monkeypatch.setenv("SEED_PASSWORD", SEED_PW)
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("CRON_SECRET", "c" * 40)
     monkeypatch.setattr(motor.motor_asyncio, "AsyncIOMotorClient", AsyncMongoMockClient)
@@ -53,10 +55,10 @@ def test_backup_contains_data_and_skips_noise(app):
 
 def test_system_health_owner_only_and_reports_backup(app):
     c, server = app
-    login = c.post("/api/auth/login", json={"email": "admin@newdru.com", "password": "Owner-Test-Pass-2026"})
+    login = c.post("/api/auth/login", json={"email": "admin@newdru.com", "password": OWNER_PW})
     c.cookies.clear()
     owner = {"Authorization": f"Bearer {login.json()['token']}"}
-    login = c.post("/api/auth/login", json={"email": "store@newdru.com", "password": "Seed-Test-Pass-2026"})
+    login = c.post("/api/auth/login", json={"email": "store@newdru.com", "password": SEED_PW})
     c.cookies.clear()
     store = {"Authorization": f"Bearer {login.json()['token']}"}
     assert c.get("/api/system/health", headers=store).status_code == 403
