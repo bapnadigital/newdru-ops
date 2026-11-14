@@ -214,3 +214,24 @@ def test_cannot_remove_the_only_owner(app_client):
     assert r.status_code == 400
     r = c.patch(f"/api/users/{me['id']}", json={"active": False}, headers=owner)
     assert r.status_code == 400
+
+
+def test_demo_password_login_must_change_first(app_client):
+    c, server = app_client
+    async def make():
+        from auth import hash_password
+        await server.db.users.insert_one({"id": "old1", "email": "old@newdru.com", "name": "Old", "role": "store_manager",
+                                          "active": True, "password_hash": hash_password("Newdru@2026")})
+    c.portal.call(make)
+    tok = bearer(c, "old@newdru.com", "Newdru@2026")
+    me = c.get("/api/auth/me", headers=tok).json()
+    assert me["must_change_password"] is True
+    assert c.get("/api/pos/sales", headers=tok).status_code == 403          # blocked until changed
+    bad = c.post("/api/auth/change-password", json={"current_password": "Newdru@2026", "new_password": "Newdru@2026"}, headers=tok)
+    assert bad.status_code == 400
+    ok = c.post("/api/auth/change-password", json={"current_password": "Newdru@2026", "new_password": "Brand-New-Pass-77"}, headers=tok)
+    assert ok.status_code == 200
+    c.cookies.clear()
+    new = {"Authorization": f"Bearer {ok.json()['token']}"}
+    assert c.get("/api/pos/sales", headers=new).status_code == 200
+    assert c.get("/api/pos/sales", headers=tok).status_code == 401          # old session ended

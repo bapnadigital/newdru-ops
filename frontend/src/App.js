@@ -13,6 +13,7 @@ import Receive from "@/pages/Receive";
 import StockCount from "@/pages/StockCount";
 import Returns from "@/pages/Returns";
 import ActivityLog from "@/pages/ActivityLog";
+import ChangePassword from "@/pages/ChangePassword";
 import Transfers from "@/pages/Transfers";
 import StockLedger from "@/pages/StockLedger";
 import Customers from "@/pages/Customers";
@@ -41,6 +42,7 @@ const WAREHOUSE = ["warehouse_manager", "warehouse_staff"];
 function HomeGate() {
   const { user } = useAuth();
   if (!user) return null;
+  if (user.must_change_password) return <Navigate to="/change-password" replace />;
   if (user.role === "owner") return <Dashboard />;
   if (STORE.includes(user.role)) return <Navigate to="/pos" replace />;
   if (WAREHOUSE.includes(user.role)) return <Navigate to="/inventory" replace />;
@@ -62,6 +64,7 @@ function App() {
             <Route path="/products" element={<ProtectedRoute roles={[...OWNER, ...WAREHOUSE]}><Products /></ProtectedRoute>} />
             <Route path="/inventory" element={<ProtectedRoute roles={[...OWNER, ...STORE, ...WAREHOUSE]}><Inventory /></ProtectedRoute>} />
             <Route path="/receive" element={<ProtectedRoute roles={[...OWNER, ...STORE, ...WAREHOUSE]}><Receive /></ProtectedRoute>} />
+            <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
             <Route path="/activity" element={<ProtectedRoute roles={OWNER}><ActivityLog /></ProtectedRoute>} />
             <Route path="/returns" element={<ProtectedRoute roles={[...OWNER, "store_manager"]}><Returns /></ProtectedRoute>} />
             <Route path="/stock-count" element={<ProtectedRoute roles={[...OWNER, ...STORE, ...WAREHOUSE]}><StockCount /></ProtectedRoute>} />

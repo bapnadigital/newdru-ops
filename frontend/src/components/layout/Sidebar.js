@@ -2,7 +2,7 @@ import { NavLink } from "react-router-dom";
 import {
   LayoutDashboard, Package, Boxes, ScanBarcode, ArrowLeftRight,
   ShoppingCart, Users, LineChart, UserCog, ClipboardList, LogOut, Plug,
-  Container, Wallet, ShieldCheck, Activity, LifeBuoy, Settings2, BookOpen, ListChecks, Undo2, History,
+  Container, Wallet, ShieldCheck, Activity, LifeBuoy, Settings2, BookOpen, ListChecks, Undo2, History, KeyRound,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import NewdruLogo from "@/components/NewdruLogo";
@@ -44,6 +44,7 @@ const NAV = [
   { to: "/users", label: "Users", icon: UserCog, roles: OWNER, section: "Admin" },
   { to: "/activity", label: "Activity Log", icon: History, roles: OWNER, section: "Admin" },
   { to: "/integrations", label: "Integrations", icon: Plug, roles: OWNER, section: "Admin" },
+  { to: "/change-password", label: "Change Password", icon: KeyRound, roles: ANY, section: "Admin" },
   { to: "/help", label: "User Guide", icon: BookOpen, roles: ANY, section: "Admin" },
 ];
 

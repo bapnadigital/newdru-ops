@@ -48,3 +48,4 @@ Scanners: pip-audit (clean), Bandit (only false positives / low), yarn audit (bu
 | SEC-033 | High | POS trusted the price and discount sent by the browser: a cashier could bill items cheaper or give discounts the screen forbids | Fixed — price/GST from product list; discounts owner/store manager only; tests added |
 | SEC-034 | Medium | Store/warehouse managers could change selling price, MRP, cost and GST (screen and CSV import) | Fixed — owner only on existing products; other fields still editable |
 | SEC-035 | Low | Owner could demote/deactivate the only owner account | Fixed |
+| SEC-036 | High | Accounts migrated from Emergent likely still use the public demo password; no way for staff to change their own password | Fixed — demo password only unlocks a forced change-password screen; self-service change added; public password refused on create/reset |

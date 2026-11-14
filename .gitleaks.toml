@@ -4,4 +4,4 @@ useDefault = true
 
 [allowlist]
 description = "Fake test passwords (never real)"
-regexes = ['''(Owner|Seed)-Test-Pass-2026''', '''Another-Pass-2026''']
+regexes = ['''(Owner|Seed)-Test-Pass-2026''', '''Another-Pass-2026''', '''Brand-New-Pass-77''', '''Newdru@2026''']

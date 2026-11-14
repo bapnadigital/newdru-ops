@@ -378,3 +378,9 @@ Only the **owner** can change the selling price, MRP, cost or GST rate of an exi
 ## 21. Activity log (owner only)
 
 **Activity Log** in the Admin menu shows who did what and when: bills, returns, stock changes, price edits, staff account changes, sign-ins and every data download. Nobody can edit or delete these entries. Pick **Data downloads** now and then: it shows anyone who downloaded the customer or sales list (highlighted in yellow).
+
+## 22. Changing your password
+
+Everyone can change their own password: **Change Password** in the menu → current password → new password twice (at least 10 characters). It signs you out on every other device.
+
+Accounts copied over from the old Emergent app may still have the old shared password, which is public. Anyone who signs in with it is taken straight to Change Password and can't do anything else until they pick a new one. The owner can also set a new password for any staff member in **Users**.

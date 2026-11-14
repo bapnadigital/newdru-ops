@@ -16,6 +16,10 @@ export default function ProtectedRoute({ children, roles }) {
     );
   }
   if (!user) return <Navigate to={LOGIN_PATH} replace state={{ from: location.pathname + location.search }} />;
+  // Old public demo password: nothing else until a new one is set.
+  if (user.must_change_password && location.pathname !== "/change-password") {
+    return <Navigate to="/change-password" replace />;
+  }
   if (roles && roles.length && !roles.includes(user.role)) {
     return <Navigate to="/" replace />;
   }

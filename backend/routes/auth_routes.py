@@ -9,7 +9,9 @@ from auth import (
     verify_password, create_access_token, create_refresh_token,
     set_auth_cookies, clear_auth_cookies, get_current_user, audit,
     get_jwt_secret, JWT_ALGORITHM, ACCESS_TTL_MIN, COOKIE_SAMESITE,
+    hash_password, KNOWN_PUBLIC_PASSWORDS,
 )
+from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -62,12 +64,43 @@ async def login(body: LoginIn, request: Request, response: Response):
 
     for ident, _ in identifiers:
         await db.login_attempts.delete_one({"identifier": ident})
+    if body.password in KNOWN_PUBLIC_PASSWORDS and not user.get("must_change_password"):
+        await db.users.update_one({"id": user["id"]}, {"$set": {"must_change_password": True}})
+        user["must_change_password"] = True
     tv = int(user.get("token_version", 0))
     at = create_access_token(user["id"], user["email"], user["role"], tv)
     rt = create_refresh_token(user["id"], tv)
     set_auth_cookies(response, at, rt)
     await audit(db, user, "login", "user", user["id"])
     return {"user": _sanitize(user), "token": at}
+
+
+class ChangePasswordIn(BaseModel):
+    current_password: str = Field(max_length=128)
+    new_password: str = Field(min_length=10, max_length=128)
+
+
+@router.post("/change-password")
+async def change_password(body: ChangePasswordIn, request: Request, response: Response,
+                          user: dict = Depends(get_current_user)):
+    db = request.app.state.db
+    await rate_limit(db, f"pwchange:{user['id']}", 10, 15 * 60)
+    full = await db.users.find_one({"id": user["id"]})
+    if not full or not verify_password(body.current_password, full["password_hash"]):
+        raise HTTPException(400, "Current password is wrong")
+    if body.new_password in KNOWN_PUBLIC_PASSWORDS or body.new_password == body.current_password:
+        raise HTTPException(400, "Choose a new password you haven't used before")
+    await db.users.update_one({"id": user["id"]}, {
+        "$set": {"password_hash": hash_password(body.new_password), "updated_at": now_iso()},
+        "$unset": {"must_change_password": ""},
+        "$inc": {"token_version": 1}})          # signs out every other device
+    tv = int(full.get("token_version", 0)) + 1
+    at = create_access_token(full["id"], full["email"], full["role"], tv)
+    rt = create_refresh_token(full["id"], tv)
+    set_auth_cookies(response, at, rt)           # this device stays signed in
+    await audit(db, user, "user.password_change", "user", user["id"])
+    fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0})
+    return {"ok": True, "token": at, "user": _sanitize(fresh)}
 
 
 @router.post("/logout")

@@ -81,7 +81,15 @@ async def get_current_user(request: Request) -> dict:
     # which kills every token issued before it.
     if int(payload.get("tv", 0)) != int(user.get("token_version", 0)):
         raise HTTPException(status_code=401, detail="Session expired. Please log in again.")
+    # Signed in with the old public demo password: only allowed to set a new one.
+    if user.get("must_change_password") and request.url.path not in MUST_CHANGE_ALLOWED:
+        raise HTTPException(status_code=403, detail="Please set a new password first.")
     return user
+
+
+# Passwords that were ever public (old demo / docs). Never accepted as a working password.
+KNOWN_PUBLIC_PASSWORDS = {"Newdru@2026"}
+MUST_CHANGE_ALLOWED = {"/api/auth/me", "/api/auth/change-password", "/api/auth/logout"}
 
 
 def require_roles(*roles: str):

@@ -1,7 +1,7 @@
 """User management (owner-only)."""
 from fastapi import APIRouter, Request, HTTPException, Depends
 from models import UserCreate, UserUpdate, ROLE_OWNER, ALL_ROLES, gen_id, now_iso
-from auth import hash_password, require_roles, audit
+from auth import hash_password, require_roles, audit, KNOWN_PUBLIC_PASSWORDS
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -23,6 +23,8 @@ async def create_user(body: UserCreate, request: Request, actor: dict = Depends(
     if body.role not in ALL_ROLES:
         raise HTTPException(400, "Invalid role")
     email = body.email.lower().strip()
+    if body.password in KNOWN_PUBLIC_PASSWORDS:
+        raise HTTPException(400, "That password is public (old demo password). Choose another.")
     if await db.users.find_one({"email": email}):
         raise HTTPException(409, "Email already exists")
     doc = {
@@ -45,6 +47,8 @@ async def update_user(user_id: str, body: UserUpdate, request: Request,
     if "role" in updates and updates["role"] not in ALL_ROLES:
         raise HTTPException(400, "Invalid role")
     if "password" in updates:
+        if updates["password"] in KNOWN_PUBLIC_PASSWORDS:
+            raise HTTPException(400, "That password is public (old demo password). Choose another.")
         updates["password_hash"] = hash_password(updates.pop("password"))
     if not updates:
         raise HTTPException(400, "Nothing to update")
@@ -57,7 +61,10 @@ async def update_user(user_id: str, body: UserUpdate, request: Request,
     updates["updated_at"] = now_iso()
     # Changing password, role or active status logs the user out everywhere.
     bump = {"token_version": 1} if ({"password_hash", "role", "active"} & updates.keys()) else None
-    res = await db.users.update_one({"id": user_id}, {"$set": updates, **({"$inc": bump} if bump else {})})
+    ops = {"$set": updates, **({"$inc": bump} if bump else {})}
+    if "password_hash" in updates:
+        ops["$unset"] = {"must_change_password": ""}
+    res = await db.users.update_one({"id": user_id}, ops)
     if res.matched_count == 0:
         raise HTTPException(404, "User not found")
     await audit(db, actor, "user.update", "user", user_id, {k: v for k, v in updates.items() if k != "password_hash"})
