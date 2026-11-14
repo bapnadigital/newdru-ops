@@ -364,3 +364,7 @@ Amazon, Flipkart and newdru.com orders are not shipped from this app.
 The items go straight back into store stock. Cash refunds are taken off the expected cash in the till report. Cashiers cannot do returns; this is deliberate, because returns are the most common way cash goes missing. Bills older than 30 days need the owner.
 
 For an exchange: do the return first (refund as store credit), then ring up the new item as a normal sale.
+
+## 19. Automatic sign-out
+
+If nobody touches the mouse, keyboard or screen for **30 minutes**, the app signs out by itself. This stops someone billing or doing returns under another person's name on the shop computer. Just sign in again; nothing is lost (a half-made cart may need re-scanning).

@@ -42,3 +42,6 @@ Scanners: pip-audit (clean), Bandit (only false positives / low), yarn audit (bu
 | SEC-027 | Info | Offline POS queue stores unsent sales (with customer name/phone) in the till browser until it reconnects | Accepted — needed for offline billing; cleared on sync |
 | SEC-028 | Medium | Production could create starter logins with the public demo password if SEED_PASSWORD was not set | Fixed — refused in production, test added |
 | SEC-029 | Info | svgo 1.x inside react-scripts (build-time only, processes our own SVGs) has advisories with no 1.x patch | Accepted — not shipped to browsers; revisit if moving off CRA |
+| SEC-030 | Medium | Sessions stayed open up to 7 days on shared shop computers | Fixed — 30-min idle sign-out (also on reopen) |
+| SEC-031 | Medium | Data exports were not logged | Fixed — every export recorded in audit log with user and IP |
+| SEC-032 | Medium | Same card payment could be claimed by two simultaneous bills | Fixed — atomic claim |

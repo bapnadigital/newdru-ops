@@ -60,7 +60,7 @@ export default function Returns() {
       <form onSubmit={find} className="flex gap-2 mb-4 max-w-md print:hidden">
         <input value={billNo} onChange={(e) => setBillNo(e.target.value)} placeholder="Bill number, e.g. NW-26-00012"
                data-testid="return-bill" className="flex-1 border border-slate-300 rounded-md px-3 py-2 text-sm" />
-        <button className="btn-brand">Find bill</button>
+        <button className="btn-brand whitespace-nowrap">Find bill</button>
       </form>
 
       {sale && (
