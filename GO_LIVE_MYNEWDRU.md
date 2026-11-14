@@ -42,7 +42,7 @@ These need your logins or a payment, so I cannot do them for you. Do them in ord
 
 ### Step 1 — New, clean GitHub repository (cuts Emergent off)
 
-The current repo `newdru-main` was created by Emergent, Emergent can still push to it, and its history contains the old demo password and your cost prices. We start a fresh repo with clean history.
+Done: `bapnadigital/newdru-ops` now holds the clean code. The old repo `newdru-main` was created by Emergent, Emergent can still push to it, and its history contains the old demo password and your cost prices. We start a fresh repo with clean history.
 
 1. Go to https://github.com/new
 2. Owner: **bapnadigital**. Name: **newdru-ops**. Choose **Private**. Do **not** tick "Add a README".
@@ -93,8 +93,24 @@ The current repo `newdru-main` was created by Emergent, Emergent can still push 
 | `BUSINESS_GSTIN` | Your GSTIN |
 | `INVOICE_PREFIX` | `NW` (or what the store uses today) |
 | `PINELABS_MODE` | `simulator` for now |
+| `CRON_SECRET` | Another 64-character random password from your password manager (lets the 5-minute scheduler run sync jobs) |
+| `UNICOMMERCE_MODE` | `live` (after the Unicommerce step below) |
+| `UNICOMMERCE_TENANT` | The first part of your Uniware address: for `newdru.unicommerce.com` it is `newdru` |
+| `UNICOMMERCE_USER` | The Uniware API user's login (see below) |
+| `UNICOMMERCE_PASSWORD` | That user's password |
+| `UNICOMMERCE_FACILITIES` | Which app location reads from which Uniware facility, e.g. `AMAZON_FC=AMZFBA01,FLIPKART_FC=FKSMART01` |
 
 3. Click **Deploy** (or re-run the GitHub deploy) so the app picks up the secrets.
+
+### Step 5b — Connect Unicommerce
+
+1. Log in to Uniware → **Settings** → **Users** → **Add user**: name `NEWDRU Ops API`, role **Admin**, give it access to the facilities you want to read. Set a strong password (password manager).
+2. Find the facility codes: Uniware → **Settings** → **Facilities** (the code column).
+3. Decide the mapping. Start with marketplace stock only, for example `AMAZON_FC=<Amazon FBA facility code>,FLIPKART_FC=<Flipkart facility code>`. Only mapped locations are overwritten; Store and Bhiwandi stay managed in the app unless you add them.
+4. Add the five `UNICOMMERCE_*` secrets and `CRON_SECRET` in Cloudflare (table above), then redeploy.
+5. In the app: **Admin → Integrations → Unicommerce → Sync stock now**. Check a few SKUs against Uniware. After that it runs by itself (stock every 30 minutes, orders every hour).
+
+The connection is **read-only**: the app never changes anything in Unicommerce.
 
 ### Step 6 — Staff-only gate (Cloudflare Access)
 
@@ -102,7 +118,7 @@ The current repo `newdru-main` was created by Emergent, Emergent can still push 
 2. Name `NEWDRU Ops staff`, domain `mynewdru.in`, path empty (whole site). Session duration **1 month**.
 3. Policy: **Allow** → Include → **Emails** → list each staff member's email (and yours). Login method: **One-time PIN**.
 4. Add a second application **NEWDRU public warranty** with these paths on `mynewdru.in`, policy action **Bypass** → Include **Everyone**:
-   `warranty`, `api/public/*`, `api/warranty/public/*`, `api/pinelabs/webhook`, `static/*`, `newdru-logo.png`, `api/health`
+   `warranty`, `api/public/*`, `api/warranty/public/*`, `api/pinelabs/webhook`, `static/*`, `newdru-logo.png`, `api/health`, `api/internal/cron`
 5. Test: open mynewdru.in in a private window. You should see a Cloudflare email-code screen. `mynewdru.in/warranty` should open without it.
 
 ### Step 7 — Move the data from Emergent (one time, 10 minutes, at closing time)

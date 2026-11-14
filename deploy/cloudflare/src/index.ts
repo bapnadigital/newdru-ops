@@ -22,6 +22,11 @@ interface Env {
   SHOPIFY_LOCATION_ID?: string;
   SHOPIFY_WEBHOOK_SECRET?: string;
   UNICOMMERCE_MODE?: string;
+  UNICOMMERCE_TENANT?: string;
+  UNICOMMERCE_USER?: string;
+  UNICOMMERCE_PASSWORD?: string;
+  UNICOMMERCE_FACILITIES?: string;
+  CRON_SECRET?: string;
   GUPSHUP_MODE?: string;
   GUPSHUP_API_KEY?: string;
   GUPSHUP_APP_NAME?: string;
@@ -37,7 +42,8 @@ const PASS_THROUGH: (keyof Env)[] = [
   "MONGO_URL", "DB_NAME", "JWT_SECRET", "ADMIN_EMAIL", "SEED_PASSWORD",
   "PINELABS_MODE", "PINELABS_WEBHOOK_SECRET",
   "SHOPIFY_MODE", "SHOPIFY_SHOP_DOMAIN", "SHOPIFY_ACCESS_TOKEN", "SHOPIFY_LOCATION_ID", "SHOPIFY_WEBHOOK_SECRET",
-  "UNICOMMERCE_MODE", "GUPSHUP_MODE", "GUPSHUP_API_KEY", "GUPSHUP_APP_NAME", "GUPSHUP_SOURCE_NUMBER",
+  "UNICOMMERCE_MODE", "UNICOMMERCE_TENANT", "UNICOMMERCE_USER", "UNICOMMERCE_PASSWORD",
+  "UNICOMMERCE_FACILITIES", "CRON_SECRET", "GUPSHUP_MODE", "GUPSHUP_API_KEY", "GUPSHUP_APP_NAME", "GUPSHUP_SOURCE_NUMBER",
   "MSG91_MODE", "BUSINESS_NAME", "BUSINESS_GSTIN", "INVOICE_PREFIX",
 ];
 
@@ -84,13 +90,24 @@ export default {
     return instance(env).fetch(request);
   },
 
-  // Keep-warm + health check every 5 minutes (see "triggers" in wrangler.jsonc).
+  // Every 5 minutes: keep the app warm, check health, and let it run any
+  // scheduled jobs that are due (Unicommerce stock every 30 min, orders hourly).
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(
-      instance(env)
-        .fetch(new Request("https://mynewdru.in/api/health"))
-        .then((r) => { if (!r.ok) console.error("health check failed", r.status); })
-        .catch((e) => console.error("health check error", e)),
-    );
+    const app = instance(env);
+    ctx.waitUntil((async () => {
+      try {
+        const h = await app.fetch(new Request("https://mynewdru.in/api/health"));
+        if (!h.ok) console.error("health check failed", h.status);
+        if (env.CRON_SECRET) {
+          const r = await app.fetch(new Request("https://mynewdru.in/api/internal/cron", {
+            method: "POST",
+            headers: { "X-Cron-Token": env.CRON_SECRET },
+          }));
+          if (!r.ok) console.error("scheduled jobs failed", r.status);
+        }
+      } catch (e) {
+        console.error("scheduler error", e);
+      }
+    })());
   },
 } satisfies ExportedHandler<Env>;

@@ -17,6 +17,9 @@ from models import (
     ROLE_OWNER, ROLE_WH_MANAGER,
 )
 from auth import require_roles, get_current_user, audit
+from security import secret_matches
+from services import unicommerce as uc
+from services import unicommerce_sync as ucs
 
 router = APIRouter(prefix="/fc-sync", tags=["fc-sync"])
 
@@ -28,19 +31,25 @@ def _cred(k: str, default: str = "") -> str:
 
 
 def _unicommerce_mode() -> str:
-    m = (os.environ.get("UNICOMMERCE_MODE") or "disabled").lower()
-    return m if m in ("disabled", "csv_only", "live") else "disabled"
+    return uc.mode()
 
 
 @router.get("/config")
-async def config(user: dict = Depends(get_current_user)):
+async def config(request: Request, user: dict = Depends(require_roles(ROLE_OWNER, ROLE_WH_MANAGER))):
+    db = request.app.state.db
+    last = await db.sync_runs.find(
+        {"source": "unicommerce"}, {"_id": 0}).sort("finished_at", -1).limit(5).to_list(5)
     return {
         "mode": _unicommerce_mode(),
-        "base_url": _cred("UNICOMMERCE_BASE_URL") or None,
         "tenant_set": bool(_cred("UNICOMMERCE_TENANT")),
         "api_user_set": bool(_cred("UNICOMMERCE_USER")),
+        "password_set": bool(_cred("UNICOMMERCE_PASSWORD")),
+        "facilities": uc.facility_map(),
+        "inventory_every_minutes": ucs.INVENTORY_EVERY_MIN,
+        "orders_every_minutes": ucs.ORDERS_EVERY_MIN,
         "supported_locations": sorted(VALID_FC_CODES),
-        "note": "CSV upload is always available. Set UNICOMMERCE_MODE=live with credentials to enable API pull.",
+        "recent_runs": last,
+        "note": "CSV upload is always available. Live sync runs automatically when UNICOMMERCE_MODE=live.",
     }
 
 
@@ -116,14 +125,76 @@ async def upload_csv(
     }
 
 
-@router.post("/pull")
-async def pull_live(request: Request, location_code: str,
-                    actor: dict = Depends(require_roles(ROLE_OWNER, ROLE_WH_MANAGER))):
-    """Live Unicommerce pull. Stub — enables when UNICOMMERCE_MODE=live and creds are set."""
-    if location_code not in VALID_FC_CODES:
-        raise HTTPException(400, "Invalid location_code")
+def _live_client() -> uc.UnicommerceClient:
     if _unicommerce_mode() != "live":
-        raise HTTPException(503, "Unicommerce live mode is disabled. Use /fc-sync/csv or set UNICOMMERCE_MODE=live with credentials.")
-    # TODO: real client — will map to Unicommerce inventory endpoint here.
-    return {"status": "not_implemented", "location_code": location_code,
-            "note": "Unicommerce API client will be added when creds are provided."}
+        raise HTTPException(503, "Unicommerce live mode is off. Use CSV upload, or set UNICOMMERCE_MODE=live with the login details.")
+    try:
+        return uc.UnicommerceClient.from_env()
+    except uc.UnicommerceError as e:
+        raise HTTPException(503, str(e))
+
+
+@router.post("/pull")
+async def pull_live(request: Request, location_code: Optional[str] = None,
+                    actor: dict = Depends(require_roles(ROLE_OWNER, ROLE_WH_MANAGER))):
+    """Pull stock now from Unicommerce for one mapped location (or all mapped)."""
+    client = _live_client()
+    locations = [location_code.upper()] if location_code else None
+    try:
+        result = await ucs.sync_inventory(request.app.state.db, client, locations, actor)
+    except uc.UnicommerceError as e:
+        raise HTTPException(502, str(e))
+    await audit(request.app.state.db, actor, "fc_sync.unicommerce_pull", "fc_sync", None,
+                {k: {"changed": v["changed"], "unknown": v["unknown_count"]} for k, v in result["locations"].items()})
+    return result
+
+
+@router.post("/orders/pull")
+async def pull_orders(request: Request, since_minutes: int = 1440,
+                      actor: dict = Depends(require_roles(ROLE_OWNER))):
+    """Pull marketplace orders updated in the last N minutes (max 1440)."""
+    client = _live_client()
+    try:
+        return await ucs.sync_orders(request.app.state.db, client, since_minutes, actor)
+    except uc.UnicommerceError as e:
+        raise HTTPException(502, str(e))
+
+
+@router.get("/orders/summary")
+async def orders_summary(request: Request, days: int = 7,
+                         actor: dict = Depends(require_roles(ROLE_OWNER))):
+    """Orders by channel and status for the last N days (from synced Unicommerce data)."""
+    db = request.app.state.db
+    days = max(1, min(int(days), 90))
+    since = (datetime.now(timezone.utc).timestamp() - days * 86400) * 1000
+    rows = await db.unicommerce_orders.find({}, {"_id": 0, "channel": 1, "status": 1, "uc_created": 1}).to_list(200_000)
+    out: dict = {}
+    for r in rows:
+        created = r.get("uc_created")
+        if isinstance(created, (int, float)) and created < since:
+            continue
+        ch = r.get("channel") or "UNKNOWN"
+        st = r.get("status") or "UNKNOWN"
+        out.setdefault(ch, {}).setdefault(st, 0)
+        out[ch][st] += 1
+    return {"days": days, "by_channel": out, "total": sum(sum(v.values()) for v in out.values())}
+
+
+@router.get("/runs")
+async def sync_runs(request: Request, limit: int = 20,
+                    actor: dict = Depends(require_roles(ROLE_OWNER, ROLE_WH_MANAGER))):
+    db = request.app.state.db
+    return await db.sync_runs.find({"source": "unicommerce"}, {"_id": 0}).sort(
+        "finished_at", -1).limit(max(1, min(int(limit), 100))).to_list(100)
+
+
+# ---- Scheduler hook (called every 5 minutes by the Cloudflare Worker cron) ----
+internal = APIRouter(prefix="/internal", tags=["internal"])
+
+
+@internal.post("/cron")
+async def cron(request: Request):
+    expected = os.environ.get("CRON_SECRET")
+    if not secret_matches(request.headers.get("x-cron-token"), expected):
+        raise HTTPException(401, "Unauthorized")
+    return {"unicommerce": await ucs.run_due(request.app.state.db)}

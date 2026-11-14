@@ -27,7 +27,7 @@ from routes.labels import router as labels_router
 from routes.integrations_routes import router as integrations_router
 from routes.pinelabs import router as pinelabs_router
 from routes.b2b import router as b2b_router
-from routes.fc_sync import router as fc_sync_router
+from routes.fc_sync import router as fc_sync_router, internal as internal_router
 from routes.messaging_routes import router as messaging_router
 from routes.bulk_import import router as bulk_import_router
 from routes.planner import router as planner_router
@@ -83,6 +83,7 @@ api_router.include_router(integrations_router)
 api_router.include_router(pinelabs_router)
 api_router.include_router(b2b_router)
 api_router.include_router(fc_sync_router)
+api_router.include_router(internal_router)
 api_router.include_router(messaging_router)
 api_router.include_router(bulk_import_router)
 api_router.include_router(planner_router)
@@ -143,6 +144,8 @@ async def seed_admin_and_indexes():
     await db.audit_logs.create_index("created_at")
     await db.login_attempts.create_index("identifier")
     await db.rate_limits.create_index("expires_at", expireAfterSeconds=0)
+    await db.sync_runs.create_index([("source", 1), ("kind", 1), ("finished_at", -1)])
+    await db.unicommerce_orders.create_index("code", unique=True)
     # Warranty indexes
     await db.warranty_registrations.create_index("warranty_id", unique=True, sparse=True)
     await db.warranty_registrations.create_index("email")

@@ -12,6 +12,23 @@ export default function Integrations() {
   const [file, setFile] = useState(null);
   const [fcLoc, setFCLoc] = useState("AMAZON_FC");
   const [uploading, setUploading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+
+  const syncNow = async (what) => {
+    setSyncing(true);
+    try {
+      if (what === "orders") {
+        const { data } = await api.post("/fc-sync/orders/pull", null, { params: { since_minutes: 1440 } });
+        toast.success(`Orders: ${data.new} new, ${data.updated} updated`);
+      } else {
+        const { data } = await api.post("/fc-sync/pull");
+        const parts = Object.entries(data.locations || {}).map(([k, v]) => `${k}: ${v.changed} changed, ${v.unknown_count} unknown`);
+        toast.success(`Stock synced · ${parts.join(" · ")}`);
+      }
+      load();
+    } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
+    setSyncing(false);
+  };
 
   const load = () => {
     api.get("/pinelabs/config").then(r => setPL(r.data)).catch(() => setPL({ mode: "error" }));
@@ -36,7 +53,7 @@ export default function Integrations() {
     <div>
       <div className="mb-6">
         <h1 className="text-2xl md:text-3xl font-brand text-slate-900">Integrations</h1>
-        <p className="text-sm text-slate-500">Payment terminal, marketplace inventory sync and outbound messaging. All keys are read from the backend .env.</p>
+        <p className="text-sm text-slate-500">Payment terminal, Unicommerce stock and order sync, and outbound messaging. Keys are stored as Cloudflare secrets, never in the app.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -45,8 +62,24 @@ export default function Integrations() {
           <PineLabsSettings pl={pl} reload={load} />
         </Card>
 
-        <Card icon={<ShoppingBag size={18} />} title="Unicommerce (FC sync)" mode={fc?.mode}
-              subtitle="Populate Amazon FC / Flipkart FC columns via CSV now, live API when creds arrive.">
+        <Card icon={<ShoppingBag size={18} />} title="Unicommerce" mode={fc?.mode}
+              subtitle="Stock syncs automatically every 30 min, marketplace orders every hour. CSV upload still works.">
+          {fc?.mode === "live" && (
+            <div className="mt-3 space-y-2">
+              <div className="text-xs text-slate-600">
+                <Row k="Facilities" v={Object.entries(fc.facilities || {}).map(([k, v]) => `${k} ← ${v}`).join(", ") || "none mapped"} />
+                <Row k="Login set" v={fc.tenant_set && fc.api_user_set && fc.password_set ? "yes" : "no"} />
+                <Row k="Last run" v={fc.recent_runs?.[0] ? `${fc.recent_runs[0].kind} · ${fc.recent_runs[0].ok ? "OK" : "FAILED"} · ${new Date(fc.recent_runs[0].finished_at).toLocaleString()}` : "never"} />
+                {fc.recent_runs?.[0] && !fc.recent_runs[0].ok && (
+                  <div className="text-red-600 mt-1">{fc.recent_runs[0].result?.error}</div>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button data-testid="uc-sync-stock" onClick={() => syncNow("stock")} disabled={syncing} className="btn-brand disabled:opacity-50">Sync stock now</button>
+                <button data-testid="uc-sync-orders" onClick={() => syncNow("orders")} disabled={syncing} className="border border-slate-300 rounded-md px-3 py-2 text-sm disabled:opacity-50">Sync orders (24h)</button>
+              </div>
+            </div>
+          )}
           <div className="mt-2 flex flex-wrap gap-2 items-end">
             <select value={fcLoc} onChange={(e) => setFCLoc(e.target.value)} className="border border-slate-300 rounded-md px-3 py-2 text-sm">
               <option value="AMAZON_FC">Amazon FC</option>

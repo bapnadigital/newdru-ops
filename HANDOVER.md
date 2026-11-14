@@ -47,7 +47,10 @@ Never commit `.env` files or real keys to GitHub.
 | `SEED_RESET_PASSWORDS` | `true` forces starter passwords back to the seed value on restart. Demo only. Keep `false` in production |
 | `PINELABS_MODE` | `simulator` (fake card payments), `uat`, `production` |
 | `SHOPIFY_MODE` + `SHOPIFY_*` | `disabled`, `pull_only`, `full`. Settings saved in the app take priority |
-| `UNICOMMERCE_MODE` | Amazon / Flipkart FC sync |
+| `UNICOMMERCE_MODE` | `live` turns on automatic stock (30 min) and order (60 min) sync |
+| `UNICOMMERCE_TENANT`, `UNICOMMERCE_USER`, `UNICOMMERCE_PASSWORD` | Read-only Uniware API login |
+| `UNICOMMERCE_FACILITIES` | `LOCATION=FACILITY_CODE` pairs; only mapped locations are overwritten |
+| `CRON_SECRET` | Lets the Cloudflare 5-minute scheduler trigger sync jobs |
 | `GUPSHUP_MODE`, `MSG91_MODE` + keys | WhatsApp and SMS: `disabled`, `simulator`, `live` |
 | `BUSINESS_NAME`, `BUSINESS_GSTIN`, `INVOICE_PREFIX` | Invoice details |
 
@@ -61,7 +64,7 @@ Frontend `.env`: `REACT_APP_BACKEND_URL` = the public address of the app (change
 - Card payments are in **simulator** mode. They are not real until Pine Labs is switched to UAT and then production.
 - Shopify sync is **disabled** (needs credentials).
 - WhatsApp / SMS are in **simulator** mode.
-- Amazon / Flipkart FC stock is CSV import only (live Unicommerce pull not built).
+- Unicommerce live sync is built (stock + marketplace orders, read-only) and waits for the Uniware API login.
 
 **Fixed in this handover (branch `handover/team-setup`):**
 - Starter account passwords were reset to the demo password on every server restart. That meant any password the owner changed in Users reverted. Now passwords are only set when an account is first created.
@@ -81,10 +84,10 @@ Frontend `.env`: `REACT_APP_BACKEND_URL` = the public address of the app (change
 
 ## 6. Where Shubham tracks progress
 
-- **Milestones** (progress bar per goal): https://github.com/bapnadigital/newdru-main/milestones
-- **Everything waiting on Shubham:** https://github.com/bapnadigital/newdru-main/issues?q=is%3Aopen+label%3Aneeds-shubham
-- **Work in progress:** https://github.com/bapnadigital/newdru-main/issues?q=is%3Aopen+label%3A%22status%3A+in+progress%22
-- **Open pull requests:** https://github.com/bapnadigital/newdru-main/pulls
+- **Milestones** (progress bar per goal): https://github.com/bapnadigital/newdru-ops/milestones
+- **Everything waiting on Shubham:** https://github.com/bapnadigital/newdru-ops/issues?q=is%3Aopen+label%3Aneeds-shubham
+- **Work in progress:** https://github.com/bapnadigital/newdru-ops/issues?q=is%3Aopen+label%3A%22status%3A+in+progress%22
+- **Open pull requests:** https://github.com/bapnadigital/newdru-ops/pulls
 
 ### Milestones
 
