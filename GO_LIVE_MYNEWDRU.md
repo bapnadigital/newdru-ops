@@ -191,3 +191,7 @@ Cloudflare → mynewdru.in → **Security** → **WAF**:
 | The app going down | Cloudflare restarts the container automatically, a check runs every 5 minutes, Cloudflare emails on errors (turn on notifications in Workers → newdru-ops → Settings) |
 
 No setup is 100% secure. The biggest remaining risk is people: a staff member sharing their login, or a bad change being approved. Keep logins personal and approve only changes Claude or a trusted developer has reviewed.
+
+## If the site goes down
+
+Every hour GitHub checks that mynewdru.in answers. If it doesn't (three tries), GitHub opens an issue called "mynewdru.in is not answering" and emails you. It closes the issue by itself when the site is back. The owner's **Integrations → System health** panel shows the same from inside the app.
