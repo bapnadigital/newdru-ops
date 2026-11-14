@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { api, formatApiError } from "@/lib/api";
+import { api, formatApiError, setAuthToken } from "@/lib/api";
 
 const AuthCtx = createContext(null);
 
@@ -22,7 +22,7 @@ export function AuthProvider({ children }) {
     setError(null);
     try {
       const { data } = await api.post("/auth/login", { email, password });
-      if (data.token) localStorage.setItem("newdru_token", data.token);
+      setAuthToken(data.token);
       setUser(data.user);
       return { ok: true, user: data.user };
     } catch (e) {
@@ -34,7 +34,7 @@ export function AuthProvider({ children }) {
 
   const logout = async () => {
     try { await api.post("/auth/logout"); } catch (err) { console.warn("logout call failed:", err); }
-    localStorage.removeItem("newdru_token");
+    setAuthToken(null);
     setUser(null);
   };
 

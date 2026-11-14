@@ -10,8 +10,15 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+// The login session lives in a secure, httpOnly cookie that page scripts can't read.
+// The token is only kept in memory as a fallback (never in localStorage, where
+// any injected script could steal it).
+let memoryToken = null;
+export const setAuthToken = (t) => { memoryToken = t || null; };
+try { localStorage.removeItem("newdru_token"); } catch { /* ignore */ }
+
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("newdru_token");
+  const token = memoryToken;
   if (token) {
     config.headers = config.headers || {};
     config.headers.Authorization = `Bearer ${token}`;
@@ -23,7 +30,7 @@ api.interceptors.response.use(
   (r) => r,
   (err) => {
     if (err?.response?.status === 401 && !err?.config?.url?.includes("/auth/")) {
-      localStorage.removeItem("newdru_token");
+      memoryToken = null;
       if (window.location.pathname !== LOGIN_PATH) window.location.href = LOGIN_PATH;
     }
     return Promise.reject(err);

@@ -9,6 +9,7 @@ from models import (
     gen_id, now_iso,
 )
 from auth import get_current_user, require_roles, audit, can_see_cost
+from security import safe_csv_writer, SafeDictWriter
 from services.pricing import compute_pricing, redact_cost_fields
 
 router = APIRouter(prefix="/products", tags=["products"])
@@ -256,7 +257,7 @@ async def export_csv(request: Request,
     fieldnames = ["sku", "name", "brand", "category", "variant", "mrp", "gst_rate", "hsn",
                   "channel_scope", "status", "barcode", "barcode_type", "buy_price",
                   "sell_price", "unit_weight_g", "units_per_carton"]
-    w = csv.DictWriter(output, fieldnames=fieldnames)
+    w = SafeDictWriter(output, fieldnames=fieldnames)
     w.writeheader()
     for d in docs:
         w.writerow({k: d.get(k, "") for k in fieldnames})

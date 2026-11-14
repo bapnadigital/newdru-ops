@@ -30,6 +30,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from models import gen_id, now_iso, ROLE_OWNER, ROLE_STORE_MANAGER, _blank_to_none
 from auth import get_current_user, require_roles, audit
+from security import safe_csv_writer, SafeDictWriter
 from services.geoip import lookup as geoip_lookup
 from security import client_ip, rate_limit
 from services.warranty_pdf import render_certificate
@@ -469,7 +470,7 @@ async def export_csv(request: Request,
     db = request.app.state.db
     rows = await db.warranty_registrations.find({}, {"_id": 0}).sort("created_at", -1).to_list(20000)
     out = io.StringIO()
-    w = csv.writer(out)
+    w = safe_csv_writer(out)
     w.writerow(["Warranty ID", "SKU", "Product", "Customer", "Email", "Phone",
                 "Purchase Date", "Source", "Retailer", "Registered On",
                 "Warranty End", "Status", "IP City", "IP State", "IP Country"])

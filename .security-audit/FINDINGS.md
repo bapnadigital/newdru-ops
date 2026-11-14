@@ -21,9 +21,22 @@ Gate after fixes on branch `security/mynewdru-cloudflare`: **all Critical and Hi
 | SEC-015 | Medium | Weak passwords allowed for staff accounts | Fixed: min 10 characters |
 | SEC-016 | Medium | `.gitignore` had no `.env` patterns despite the comment | Fixed |
 | SEC-017 | Low | Public warranty status page showed the customer's full name | Fixed: first name only |
-| SEC-018 | Low | Login also returns the token in the response body and the frontend keeps it in localStorage (XSS would expose it) | Open — accept for now; cookies are primary. Remove Bearer fallback in a later pass |
+| SEC-018 | Low | Login token kept in browser localStorage (an injected script could steal it) | Fixed (R2): token kept in memory only; httpOnly cookie is the session |
 | SEC-019 | Low | Customer IP addresses are sent to ipapi.co for geolocation (third-party data sharing under DPDP) | Open — owner decision; can switch to Cloudflare's own `CF-IPCountry`/`cf` data |
 | SEC-020 | Low | Build-time-only frontend advisories (react-scripts toolchain: fast-uri, js-yaml, svgo, postcss) | Open — not shipped to browsers; replace react-scripts with Vite later |
 | SEC-021 | Info | Secrets (Shopify token, Pine Labs keys) entered in the app are stored in MongoDB in plain text | Open — acceptable with Atlas encryption at rest and owner-only access; consider moving to Cloudflare secrets |
 
 Triage dismissals: detect-secrets hits in `frontend/src/constants/testIds/auth.js` (test ID names, not secrets) and the warranty ID alphabet constant.
+
+## Run R2 (15 Nov 2026) — re-scan after Unicommerce, Pine Labs and stock-count work
+
+Scanners: pip-audit (clean), Bandit (only false positives / low), yarn audit (build-time toolchain only), npm audit for deploy tools (clean), detect-secrets (test values and docs only). Manual review of new code plus a real-browser login check.
+
+| ID | Severity | Title | Status |
+|---|---|---|---|
+| SEC-022 | High | Card/UPI bills could be saved without a real Pine Labs payment (terminal reference was dropped and never checked) | Fixed: approved, unused, amount-matching terminal transaction required when the terminal is live |
+| SEC-023 | Medium | Spreadsheet formula injection: a customer name like `=HYPERLINK(...)` from the public warranty form would run as a formula when the owner opens a CSV export | Fixed: all CSV exports neutralise formula cells |
+| SEC-024 | Medium | No request size limit: large uploads could exhaust memory | Fixed: 6 MB cap on every request |
+| SEC-025 | Medium | No Content-Security-Policy: any injected script could run and call out | Fixed: strict CSP (own scripts only), no inline scripts in the build |
+| SEC-026 | Low | Free MongoDB tier has no automatic backups | Open — upgrade to Flex before daily use |
+| SEC-027 | Info | Offline POS queue stores unsent sales (with customer name/phone) in the till browser until it reconnects | Accepted — needed for offline billing; cleared on sync |

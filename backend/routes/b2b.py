@@ -20,6 +20,7 @@ from models import (
     _blank_to_none,
 )
 from auth import get_current_user, require_roles, audit
+from security import safe_csv_writer, SafeDictWriter
 from routes.inventory import _apply_delta, _write_movement
 
 router = APIRouter(prefix="/b2b", tags=["b2b"],
@@ -435,7 +436,7 @@ async def receivables_csv(request: Request, user: dict = Depends(get_current_use
     ).to_list(5000)
     now = datetime.now(timezone.utc)
     out = io.StringIO()
-    w = csv.writer(out)
+    w = safe_csv_writer(out)
     w.writerow(["Order No", "Invoice No", "Customer", "GSTIN", "Total", "Paid", "Outstanding",
                 "Invoice Date", "Due Date", "Days Overdue", "Bucket"])
     for o in orders:

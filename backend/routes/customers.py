@@ -8,6 +8,7 @@ from pymongo import UpdateOne
 
 from models import CustomerCreate, CustomerUpdate, ROLE_OWNER, ROLE_STORE_MANAGER, ROLE_CASHIER, gen_id, now_iso
 from auth import get_current_user, require_roles, audit
+from security import safe_csv_writer, SafeDictWriter
 
 router = APIRouter(prefix="/customers", tags=["customers"])
 
@@ -210,7 +211,7 @@ async def export_csv(request: Request,
     output = io.StringIO()
     fieldnames = ["name", "phone", "email", "channel", "first_seen", "last_seen",
                   "total_spend", "order_count", "avg_order_value", "tags"]
-    w = csv.DictWriter(output, fieldnames=fieldnames)
+    w = SafeDictWriter(output, fieldnames=fieldnames)
     w.writeheader()
     for d in docs:
         row = {k: d.get(k, "") for k in fieldnames}

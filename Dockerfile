@@ -9,7 +9,7 @@ COPY frontend/package.json frontend/yarn.lock ./
 RUN corepack enable && yarn install --frozen-lockfile --ignore-engines --network-timeout 600000
 COPY frontend/ ./
 # Same-origin API: the browser calls /api on mynewdru.in itself.
-ENV REACT_APP_BACKEND_URL="" GENERATE_SOURCEMAP=false CI=false
+ENV REACT_APP_BACKEND_URL="" GENERATE_SOURCEMAP=false CI=false INLINE_RUNTIME_CHUNK=false
 RUN yarn build
 
 # ---- 2. Runtime ----

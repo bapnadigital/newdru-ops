@@ -45,6 +45,7 @@ jobs:
           REACT_APP_BACKEND_URL: ""
           CI: "false"
           GENERATE_SOURCEMAP: "false"
+          INLINE_RUNTIME_CHUNK: "false"
         run: |
           corepack enable
           yarn install --frozen-lockfile --ignore-engines

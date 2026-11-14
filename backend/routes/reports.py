@@ -7,6 +7,7 @@ from typing import Optional
 
 from models import LOCATIONS, ROLE_OWNER, ROLE_STORE_MANAGER, ROLE_WH_MANAGER
 from auth import get_current_user, require_roles, can_see_cost
+from security import safe_csv_writer, SafeDictWriter
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -123,7 +124,7 @@ async def sales_csv(
         if to_date: q["created_at"]["$lte"] = to_date
     sales = await db.sales.find(q, {"_id": 0}).sort("created_at", -1).to_list(20000)
     output = io.StringIO()
-    w = csv.writer(output)
+    w = safe_csv_writer(output)
     w.writerow(["Invoice", "Date", "Cashier", "Customer", "Payment", "Subtotal", "Tax", "Discount", "Total"])
     for s in sales:
         w.writerow([s.get("invoice_no"), s.get("created_at"), s.get("cashier_name"),
@@ -147,7 +148,7 @@ async def inventory_csv(
     for r in inv:
         inv_map.setdefault(r["product_id"], {})[r["location_code"]] = r
     output = io.StringIO()
-    w = csv.writer(output)
+    w = safe_csv_writer(output)
     header = ["SKU", "Name", "Brand", "Category", "Barcode"] + [l["name"] for l in LOCATIONS] + ["Total"]
     w.writerow(header)
     for p in products:

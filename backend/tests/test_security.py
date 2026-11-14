@@ -151,3 +151,26 @@ def test_public_warranty_rejects_script_upload(app_client):
         "purchase_date": "2026-11-01", "purchase_source": "amazon",
         "invoice_url": "javascript:alert(1)"})
     assert r.status_code == 422
+
+
+def test_csv_export_neutralises_formulas(app_client):
+    c, server = app_client
+    async def seed():
+        await server.db.customers.insert_one({"id": "c1", "name": "=HYPERLINK(\"http://x\")", "phone": "9999999999"})
+    c.portal.call(seed)
+    owner = bearer(c, "admin@newdru.com", OWNER_PW)
+    body = c.get("/api/customers/export/csv", headers=owner).text
+    assert "'=HYPERLINK" in body
+
+
+def test_oversized_upload_rejected(app_client):
+    c, _ = app_client
+    r = c.post("/api/public/warranty/register", content=b"x" * (7 * 1024 * 1024),
+               headers={"Content-Type": "application/json"})
+    assert r.status_code == 413
+
+
+def test_csp_on_pages(app_client):
+    c, _ = app_client
+    r = c.get("/api/health")
+    assert "content-security-policy" not in {k.lower() for k in r.headers}

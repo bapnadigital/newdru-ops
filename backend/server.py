@@ -13,7 +13,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from auth import hash_password, verify_password
-from security import SecurityHeadersMiddleware
+from security import SecurityHeadersMiddleware, MaxBodySizeMiddleware
 from models import ROLE_OWNER, gen_id, now_iso
 from routes.auth_routes import router as auth_router
 from routes.users import router as users_router
@@ -107,6 +107,7 @@ if _origins:
         allow_headers=["Authorization", "Content-Type"],
     )
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(MaxBodySizeMiddleware)
 
 # Serve the built React app from the same origin when FRONTEND_BUILD_DIR is set.
 _frontend_dir = Path(os.environ.get("FRONTEND_BUILD_DIR", "")) if os.environ.get("FRONTEND_BUILD_DIR") else None
