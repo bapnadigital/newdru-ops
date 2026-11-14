@@ -220,7 +220,7 @@ def test_price_comes_from_product_list_and_cashier_cannot_discount(app):
     cashier = bearer(c, "till@newdru.com", SEED_PW)
     cheap = _sale("SKU-P", 10, {"method": "cash", "amount": 10})   # tries to bill at Rs 10
     r = c.post("/api/pos/sales", json=cheap, headers=cashier)
-    assert r.status_code == 400 and "does not match" in r.text     # real price is 100
+    assert r.status_code == 400 and "Price changed" in r.text      # real price is 100
     ok = c.post("/api/pos/sales", json=_sale("SKU-P", 10, {"method": "cash", "amount": 100}), headers=cashier)
     assert ok.status_code == 200 and ok.json()["total"] == 100
     disc = _sale("SKU-P", 100, {"method": "cash", "amount": 90})

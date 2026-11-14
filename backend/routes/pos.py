@@ -145,12 +145,15 @@ async def create_sale(body: SaleCreate, request: Request,
 
     # Prices come from the product list, never from the browser, so nobody can
     # bill an item cheaper by editing the request. GST rate and name too.
+    price_changed = []
     for it in body.items:
         prod = await db.products.find_one({"id": it.product_id},
                                           {"_id": 0, "sell_price": 1, "gst_rate": 1, "sku": 1, "name": 1})
         if not prod:
             raise HTTPException(400, f"'{it.name}' is not in the product list")
         if prod.get("sell_price") and float(prod["sell_price"]) > 0:
+            if abs(float(it.unit_price or 0) - float(prod["sell_price"])) > 0.005:
+                price_changed.append(f"{prod.get('name') or it.name}: ₹{float(prod['sell_price']):g}")
             it.unit_price = float(prod["sell_price"])
         if prod.get("gst_rate") is not None:
             it.gst_rate = float(prod["gst_rate"])
@@ -219,6 +222,9 @@ async def create_sale(body: SaleCreate, request: Request,
         raise HTTPException(400, "Sale total must be greater than zero.")
     payment_total = round(sum(p.amount for p in body.payments), 2)
     if abs(payment_total - calc["total"]) > 0.05:
+        if price_changed:
+            raise HTTPException(400, "Price changed since this screen loaded (" + "; ".join(price_changed[:5])
+                                + f"). New total is ₹{calc['total']:g}. Refresh the page and ring it up again.")
         raise HTTPException(400, f"Payment total {payment_total} does not match sale total {calc['total']}")
 
     now = now_iso()
