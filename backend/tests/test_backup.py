@@ -69,3 +69,28 @@ def test_system_health_owner_only_and_reports_backup(app):
     h = c.get("/api/system/health", headers=owner).json()
     assert h["scheduler"]["state"] == "ok"
     assert {j["name"]: j["state"] for j in h["jobs"]}["Nightly backup"] == "ok"
+
+
+def test_backup_restores_into_empty_database(app, tmp_path, monkeypatch):
+    c, server = app
+    async def seed():
+        await server.db.products.insert_one({"id": "p9", "sku": "S9", "name": "Lamp"})
+        await server.db.sales.insert_one({"id": "s1", "invoice_no": "NW-26-00001", "total": 499.0})
+    c.portal.call(seed)
+    r = c.post("/api/internal/backup", headers={"X-Cron-Token": "c" * 40})
+    f = tmp_path / "2026-11-15.json.gz"
+    f.write_bytes(r.content)
+
+    import mongomock
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "scripts"))
+    import restore_backup
+    target = mongomock.MongoClient()
+    monkeypatch.setattr(restore_backup, "MongoClient", lambda url: target)
+    monkeypatch.setenv("TARGET", "mongodb://restore")
+    monkeypatch.setenv("TARGET_DB", "restored")
+    monkeypatch.setattr(sys, "argv", ["restore_backup.py", str(f), "--restore"])
+    restore_backup.main()
+    db = target["restored"]
+    assert db.products.find_one({"sku": "S9"})["name"] == "Lamp"
+    assert db.sales.find_one({"invoice_no": "NW-26-00001"})["total"] == 499.0
+    assert db.users.count_documents({}) >= 1
