@@ -48,6 +48,12 @@ async def update_user(user_id: str, body: UserUpdate, request: Request,
         updates["password_hash"] = hash_password(updates.pop("password"))
     if not updates:
         raise HTTPException(400, "Nothing to update")
+    target = await db.users.find_one({"id": user_id}, {"role": 1, "active": 1})
+    if target and target.get("role") == ROLE_OWNER and (
+            updates.get("role", ROLE_OWNER) != ROLE_OWNER or updates.get("active") is False):
+        others = await db.users.count_documents({"role": ROLE_OWNER, "active": {"$ne": False}, "id": {"$ne": user_id}})
+        if others == 0:
+            raise HTTPException(400, "This is the only owner account. Make another owner first.")
     updates["updated_at"] = now_iso()
     # Changing password, role or active status logs the user out everywhere.
     bump = {"token_version": 1} if ({"password_hash", "role", "active"} & updates.keys()) else None
@@ -64,6 +70,10 @@ async def delete_user(user_id: str, request: Request, actor: dict = Depends(requ
     db = request.app.state.db
     if user_id == actor["id"]:
         raise HTTPException(400, "Cannot delete your own account")
+    target = await db.users.find_one({"id": user_id}, {"role": 1})
+    if target and target.get("role") == ROLE_OWNER and await db.users.count_documents(
+            {"role": ROLE_OWNER, "active": {"$ne": False}, "id": {"$ne": user_id}}) == 0:
+        raise HTTPException(400, "This is the only owner account.")
     res = await db.users.delete_one({"id": user_id})
     if res.deleted_count == 0:
         raise HTTPException(404, "User not found")

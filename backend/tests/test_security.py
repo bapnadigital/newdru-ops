@@ -204,3 +204,13 @@ def test_exports_are_audited(app_client):
         return await server.db.audit_logs.find({"action": "export.customers"}).to_list(10)
     entries = c.portal.call(logs)
     assert len(entries) == 1
+
+
+def test_cannot_remove_the_only_owner(app_client):
+    c, server = app_client
+    owner = bearer(c, "admin@newdru.com", OWNER_PW)
+    me = c.get("/api/auth/me", headers=owner).json()
+    r = c.patch(f"/api/users/{me['id']}", json={"role": "store_manager"}, headers=owner)
+    assert r.status_code == 400
+    r = c.patch(f"/api/users/{me['id']}", json={"active": False}, headers=owner)
+    assert r.status_code == 400
