@@ -16,6 +16,7 @@ export default function StockCount() {
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [history, setHistory] = useState([]);
+  const [openId, setOpenId] = useState(null);
   const scanRef = useRef(null);
   const canSeeHistory = ["owner", "store_manager", "warehouse_manager"].includes(user?.role);
 
@@ -25,6 +26,14 @@ export default function StockCount() {
       .catch((e) => toast.error(formatApiError(e.response?.data?.detail)));
     if (canSeeHistory) api.get("/inventory/counts", { params: { location_code: loc } }).then((r) => setHistory(r.data)).catch(() => {});
   }, [loc, canSeeHistory]);
+
+  const decide = async (id, action) => {
+    try {
+      await api.post(`/inventory/counts/${id}/${action}`);
+      toast.success(action === "approve" ? "Approved: stock updated" : "Rejected: stock unchanged");
+      setHistory((await api.get("/inventory/counts", { params: { location_code: loc } })).data);
+    } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
+  };
 
   const bySku = useMemo(() => {
     const m = {};
@@ -54,7 +63,9 @@ export default function StockCount() {
         location_code: loc, note: note || null,
         lines: entered.map(([sku, v]) => ({ sku, counted: Math.max(0, parseInt(v, 10) || 0) })),
       });
-      toast.success(`Saved. ${data.items_counted} counted, ${data.items_with_difference} different from the system.`);
+      toast.success(data.status === "pending"
+        ? `Saved. ${data.items_counted} counted. A manager will check and approve it.`
+        : `Saved. ${data.items_counted} counted, ${data.items_with_difference} different from the system.`);
       setCounts({}); setNote("");
       if (canSeeHistory) setHistory((await api.get("/inventory/counts", { params: { location_code: loc } })).data);
     } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
@@ -107,12 +118,31 @@ export default function StockCount() {
         <div className="card-surface p-4 mt-4">
           <div className="font-semibold mb-2">Recent counts</div>
           <table className="w-full text-xs">
-            <thead><tr className="text-left text-slate-500"><th>When</th><th>By</th><th>Counted</th><th>Different</th>{user?.role === "owner" && <><th>Missing</th><th>Extra</th></>}</tr></thead>
+            <thead><tr className="text-left text-slate-500"><th>When</th><th>By</th><th>Counted</th><th>Different</th><th>Missing</th><th>Extra</th><th>Status</th><th></th></tr></thead>
             <tbody>{history.map((h) => (
-              <tr key={h.id}>
-                <td>{new Date(h.created_at).toLocaleString()}</td><td>{h.counted_by}</td><td>{h.items_counted}</td>
+              <tr key={h.id} className="border-t border-slate-100 align-top">
+                <td className="py-1">{new Date(h.created_at).toLocaleString("en-IN")}</td><td>{h.counted_by}</td><td>{h.items_counted}</td>
                 <td className={h.items_with_difference ? "text-red-600 font-semibold" : ""}>{h.items_with_difference}</td>
-                {user?.role === "owner" && <><td>{h.units_missing}</td><td>{h.units_extra}</td></>}
+                <td>{h.units_missing}</td><td>{h.units_extra}</td>
+                <td>{h.status === "pending" ? <span className="text-amber-700 font-semibold">Waiting for approval</span>
+                     : h.status === "rejected" ? <span className="text-slate-500">Rejected</span>
+                     : <span className="text-emerald-700">Applied{h.approved_by ? ` (by ${h.approved_by})` : ""}</span>}</td>
+                <td className="text-right">
+                  {(h.lines || []).some((l) => l.difference) && (
+                    <button className="underline mr-2" onClick={() => setOpenId(openId === h.id ? null : h.id)}>{openId === h.id ? "Hide" : "Details"}</button>
+                  )}
+                  {h.status === "pending" && (<>
+                    <button data-testid={`count-approve-${h.id}`} className="text-emerald-700 font-semibold mr-2" onClick={() => decide(h.id, "approve")}>Approve</button>
+                    <button className="text-red-600" onClick={() => decide(h.id, "reject")}>Reject</button>
+                  </>)}
+                  {openId === h.id && (
+                    <div className="text-left mt-1 bg-slate-50 rounded p-2">
+                      {(h.lines || []).filter((l) => l.difference).map((l) => (
+                        <div key={l.sku}>{l.name} ({l.sku}): system {l.system}, counted {l.counted} → <b className={l.difference < 0 ? "text-red-600" : "text-emerald-700"}>{l.difference > 0 ? "+" : ""}{l.difference}</b></div>
+                      ))}
+                    </div>
+                  )}
+                </td>
               </tr>))}</tbody>
           </table>
         </div>

@@ -384,3 +384,7 @@ Only the **owner** can change the selling price, MRP, cost or GST rate of an exi
 Everyone can change their own password: **Change Password** in the menu → current password → new password twice (at least 10 characters). It signs you out on every other device.
 
 Accounts copied over from the old Emergent app may still have the old shared password, which is public. Anyone who signs in with it is taken straight to Change Password and can't do anything else until they pick a new one. The owner can also set a new password for any staff member in **Users**.
+
+## 23. Stock counts need a manager's OK
+
+When a cashier or warehouse staff member saves a stock count, it is marked **Waiting for approval** and the stock does not change yet. The owner or the manager of that location opens **Stock Count → Recent counts**, clicks **Details** to see what was missing or extra, then **Approve** (stock is corrected) or **Reject** (nothing changes). Counts saved by a manager or the owner are applied straight away.

@@ -247,3 +247,26 @@ def test_credit_notes_csv(app):
                                      "reason": "faulty"}, headers=owner)
     r = c.get("/api/reports/returns/csv", headers=owner)
     assert r.status_code == 200 and "NW-CN-" in r.text and "18.00" in r.text
+
+
+def test_staff_count_waits_for_manager_approval(app):
+    c, server = app
+    seed_product(c, server, "SKU-K", 10)
+    async def add_cashier():
+        from auth import hash_password
+        await server.db.users.insert_one({"id": "cash3", "email": "counter@newdru.com", "name": "K", "role": "cashier",
+                                          "active": True, "password_hash": hash_password(SEED_PW)})
+    c.portal.call(add_cashier)
+    cashier = bearer(c, "counter@newdru.com", SEED_PW)
+    r = c.post("/api/inventory/count", json={"location_code": "STORE", "lines": [{"sku": "SKU-K", "counted": 7}]}, headers=cashier)
+    assert r.json()["status"] == "pending"
+    async def qty():
+        return (await server.db.inventory.find_one({"product_id": "p-SKU-K", "location_code": "STORE"}))["quantity"]
+    assert c.portal.call(qty) == 10                                    # nothing changed yet
+    # a sale happens before approval
+    store = bearer(c, "store@newdru.com", SEED_PW)
+    assert c.post("/api/pos/sales", json=_sale("SKU-K", 100, {"method": "cash", "amount": 100}), headers=store).status_code == 200
+    assert c.post(f"/api/inventory/counts/{r.json()['id']}/approve", headers=cashier).status_code == 403
+    assert c.post(f"/api/inventory/counts/{r.json()['id']}/approve", headers=store).status_code == 200
+    assert c.portal.call(qty) == 6                                     # 10 - 1 sold - 3 missing
+    assert c.post(f"/api/inventory/counts/{r.json()['id']}/approve", headers=store).status_code == 400

@@ -278,6 +278,9 @@ async def submit_count(body: StockCountIn, request: Request,
         raise HTTPException(403, "You can't count stock at this location")
     db = request.app.state.db
     now = now_iso()
+    # Cashier / warehouse staff counts wait for a manager or the owner to approve,
+    # so nobody can hide missing stock by counting it away themselves.
+    needs_approval = actor["role"] not in (ROLE_OWNER, ROLE_STORE_MANAGER, ROLE_WH_MANAGER)
     lines_out, unknown = [], []
     for ln in body.lines:
         product = await db.products.find_one({"$or": [{"sku": ln.sku}, {"barcode": ln.sku}]}, {"_id": 0})
@@ -287,11 +290,11 @@ async def submit_count(body: StockCountIn, request: Request,
                                           {"_id": 0, "quantity": 1})
         system = int((inv or {}).get("quantity") or 0)
         delta = int(ln.counted) - system
-        if delta:
+        if delta and not needs_approval:
             await _apply_delta(db, product["id"], body.location_code, delta)
             await _write_movement(db, actor, product, body.location_code, delta, "count",
                                   reason=f"Stock count{': ' + body.note if body.note else ''}")
-        lines_out.append({"sku": product["sku"], "name": product["name"], "system": system,
+        lines_out.append({"product_id": product["id"], "sku": product["sku"], "name": product["name"], "system": system,
                           "counted": int(ln.counted), "difference": delta})
     doc = {
         "id": gen_id(), "location_code": body.location_code, "note": body.note,
@@ -301,6 +304,7 @@ async def submit_count(body: StockCountIn, request: Request,
         "items_with_difference": sum(1 for l in lines_out if l["difference"]),
         "units_missing": -sum(l["difference"] for l in lines_out if l["difference"] < 0),
         "units_extra": sum(l["difference"] for l in lines_out if l["difference"] > 0),
+        "status": "pending" if (needs_approval and any(l["difference"] for l in lines_out)) else "applied",
     }
     await db.stock_counts.insert_one(dict(doc))
     await audit(db, actor, "inventory.count", "stock_count", doc["id"],
@@ -308,7 +312,7 @@ async def submit_count(body: StockCountIn, request: Request,
     # Staff only learn how many lines differed; the owner sees the details.
     if actor["role"] == ROLE_OWNER:
         return doc
-    return {"id": doc["id"], "items_counted": doc["items_counted"],
+    return {"id": doc["id"], "items_counted": doc["items_counted"], "status": doc["status"],
             "items_with_difference": doc["items_with_difference"], "unknown_skus": unknown}
 
 
@@ -322,7 +326,54 @@ async def list_counts(request: Request, location_code: str | None = None, limit:
     if actor["role"] == ROLE_WH_MANAGER:
         q["location_code"] = LOC_BHIWANDI
     rows = await db.stock_counts.find(q, {"_id": 0}).sort("created_at", -1).limit(max(1, min(int(limit), 200))).to_list(200)
-    if actor["role"] != ROLE_OWNER:
-        for r in rows:  # managers see who counted and how many differences, not costs
-            r.pop("lines", None)
-    return rows
+    return rows   # quantities only (no costs), so managers can review and approve
+
+
+def _can_approve(actor: dict, location_code: str) -> bool:
+    return actor["role"] == ROLE_OWNER or \
+        (actor["role"] == ROLE_STORE_MANAGER and location_code == LOC_STORE) or \
+        (actor["role"] == ROLE_WH_MANAGER and location_code == LOC_BHIWANDI)
+
+
+@router.post("/counts/{count_id}/approve")
+async def approve_count(count_id: str, request: Request,
+                        actor: dict = Depends(require_roles(ROLE_OWNER, ROLE_STORE_MANAGER, ROLE_WH_MANAGER))):
+    db = request.app.state.db
+    c = await db.stock_counts.find_one({"id": count_id}, {"_id": 0})
+    if not c: raise HTTPException(404, "Count not found")
+    if not _can_approve(actor, c["location_code"]):
+        raise HTTPException(403, "You can't approve counts for this location")
+    if not await db.stock_counts.find_one_and_update(
+            {"id": count_id, "status": "pending"}, {"$set": {"status": "applying"}}):
+        raise HTTPException(400, "This count is not waiting for approval")
+    # Apply the difference found at count time (not the raw number), so sales made
+    # since the count are not wiped out.
+    for ln in c.get("lines", []):
+        d = int(ln.get("difference") or 0)
+        if not d: continue
+        product = await db.products.find_one({"$or": [{"id": ln.get("product_id")}, {"sku": ln["sku"]}]}, {"_id": 0})
+        if not product: continue
+        await _apply_delta(db, product["id"], c["location_code"], d)
+        await _write_movement(db, actor, product, c["location_code"], d, "count",
+                              reason=f"Stock count by {c.get('counted_by')} (approved)", reference_id=count_id)
+    await db.stock_counts.update_one({"id": count_id}, {"$set": {
+        "status": "applied", "approved_by": actor.get("name"), "approved_at": now_iso()}})
+    await audit(db, actor, "inventory.count_approve", "stock_count", count_id,
+                {"location": c["location_code"], "differences": c.get("items_with_difference")})
+    return {"id": count_id, "status": "applied"}
+
+
+@router.post("/counts/{count_id}/reject")
+async def reject_count(count_id: str, request: Request,
+                       actor: dict = Depends(require_roles(ROLE_OWNER, ROLE_STORE_MANAGER, ROLE_WH_MANAGER))):
+    db = request.app.state.db
+    c = await db.stock_counts.find_one({"id": count_id}, {"_id": 0, "location_code": 1})
+    if not c: raise HTTPException(404, "Count not found")
+    if not _can_approve(actor, c["location_code"]):
+        raise HTTPException(403, "You can't reject counts for this location")
+    res = await db.stock_counts.update_one({"id": count_id, "status": "pending"}, {"$set": {
+        "status": "rejected", "rejected_by": actor.get("name"), "rejected_at": now_iso()}})
+    if not res.modified_count:
+        raise HTTPException(400, "This count is not waiting for approval")
+    await audit(db, actor, "inventory.count_reject", "stock_count", count_id)
+    return {"id": count_id, "status": "rejected"}
