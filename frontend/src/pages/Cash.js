@@ -59,7 +59,7 @@ export default function Cash() {
             <StatTile
               icon={<Coins size={16} />}
               label="Cash-in-drawer"
-              value={inr(report.by_method?.cash ?? 0)}
+              value={inr(report.cash_in_drawer ?? report.by_method?.cash ?? 0)}
               tone="ok"
               testid="cash-drawer"
             />
@@ -71,6 +71,14 @@ export default function Cash() {
               testid="cash-digital"
             />
           </div>
+
+          {report.refunds && Object.keys(report.refunds).length > 0 && (
+            <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm" data-testid="cash-refunds">
+              <span className="font-semibold">Refunds given today: </span>
+              {Object.entries(report.refunds).map(([m, v]) => `${m.replace("_", " ")} ${inr(v)}`).join(" · ")}
+              {report.refunds.cash ? <span className="text-slate-600"> (cash refunds are already taken off Cash-in-drawer)</span> : null}
+            </div>
+          )}
 
           <div className="mt-6 bg-white border border-slate-200 rounded-xl shadow-sm p-5">
             <div className="text-xs uppercase tracking-widest text-slate-500 font-semibold mb-3">
