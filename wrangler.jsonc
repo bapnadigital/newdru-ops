@@ -1,0 +1,26 @@
+{
+  // NEWDRU Ops on Cloudflare Workers + Containers (Workers Paid plan required).
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "newdru-ops",
+  "main": "deploy/cloudflare/src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "observability": { "enabled": true },
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    { "pattern": "mynewdru.in", "custom_domain": true }
+  ],
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "containers": [
+    {
+      "class_name": "NewdruApp",
+      "image": "./Dockerfile",
+      "instance_type": "basic",
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "APP", "class_name": "NewdruApp" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["NewdruApp"] }]
+}

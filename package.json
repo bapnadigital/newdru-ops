@@ -1,0 +1,15 @@
+{
+  "name": "newdru-ops-deploy",
+  "private": true,
+  "description": "Cloudflare deployment for NEWDRU Ops (the app itself lives in backend/ and frontend/)",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit -p deploy/cloudflare"
+  },
+  "devDependencies": {
+    "@cloudflare/containers": "0.3.7",
+    "@cloudflare/workers-types": "^5.20261114.1",
+    "typescript": "^5.6.0",
+    "wrangler": "4.162.0"
+  }
+}

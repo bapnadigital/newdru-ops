@@ -1,0 +1,219 @@
+/* Newdru theme — coral brand identity. */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+    --brand: #F0544A;
+    --brand-deep: #D84038;
+    --brand-tint: #FDECEA;
+    --app-bg: #F7F8FA;
+    --surface: #FFFFFF;
+    --border: #E5E7EB;
+    --text-primary: #1F2430;
+    --text-secondary: #6B7280;
+    --text-muted: #94A3B8;
+    --success: #16A34A;
+    --warning: #F59E0B;
+    --danger: #DC2626;
+    --info: #2563EB;
+
+    /* shadcn tokens mapped to our brand */
+    --background: 0 0% 100%;
+    --foreground: 224 20% 15%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 20% 15%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 20% 15%;
+    --primary: 4 84% 62%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 224 20% 15%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 4 84% 62%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 4 84% 62%;
+    --radius: 0.75rem;
+    --chart-1: 4 84% 62%;
+    --chart-2: 145 63% 42%;
+    --chart-3: 38 92% 50%;
+    --chart-4: 217 91% 60%;
+    --chart-5: 271 91% 65%;
+}
+
+* {
+    border-color: hsl(var(--border));
+}
+
+html, body, #root {
+    height: 100%;
+}
+
+body {
+    margin: 0;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    color: var(--text-primary);
+    background: var(--app-bg);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+}
+
+h1, h2, h3, h4, h5, h6, .font-display {
+    font-family: 'Poppins', 'Inter', system-ui, sans-serif;
+    letter-spacing: -0.01em;
+}
+
+.font-brand {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+.font-mono {
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* Newdru wordmark */
+.newdru-wordmark {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--brand);
+    font-size: 1.75rem;
+    line-height: 1;
+}
+.newdru-wordmark-sm {
+    font-size: 1.25rem;
+}
+.newdru-tagline {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 500;
+    color: var(--brand);
+    letter-spacing: 0.02em;
+    font-size: 0.7rem;
+}
+
+/* Utility helpers */
+.card-surface {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 1px 3px rgba(15,23,42,0.04);
+}
+
+.btn-brand {
+    background: var(--brand);
+    color: #fff;
+    border-radius: 10px;
+    padding: 0.55rem 1rem;
+    font-weight: 600;
+    transition: background 150ms ease, transform 120ms ease;
+}
+.btn-brand:hover { background: var(--brand-deep); }
+.btn-brand:active { transform: translateY(1px); }
+.btn-brand:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.btn-outline {
+    background: transparent;
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.55rem 1rem;
+    font-weight: 500;
+    transition: background 150ms ease, border-color 150ms ease;
+}
+.btn-outline:hover { background: #F3F4F6; border-color: #D1D5DB; }
+
+.status-dot { width: 8px; height: 8px; border-radius: 999px; display: inline-block; }
+.status-success { background: var(--success); }
+.status-warning { background: var(--warning); }
+.status-danger { background: var(--danger); }
+.status-info { background: var(--info); }
+
+/* Table styling */
+.data-table th {
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.75rem 1rem;
+    background: #F9FAFB;
+    border-bottom: 1px solid var(--border);
+}
+.data-table td {
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    vertical-align: middle;
+}
+.data-table tr:hover td { background: #FAFAFB; }
+
+/* Sidebar */
+.sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.6rem 0.9rem;
+    border-radius: 10px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    transition: background 120ms ease, color 120ms ease;
+    cursor: pointer;
+}
+.sidebar-item:hover { background: #F3F4F6; color: var(--text-primary); }
+.sidebar-item.active {
+    background: var(--brand-tint);
+    color: var(--brand-deep);
+    font-weight: 600;
+}
+.sidebar-item.active svg { color: var(--brand); }
+
+/* KPI card accent */
+.kpi-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.25rem;
+    position: relative;
+    overflow: hidden;
+}
+.kpi-card:hover { box-shadow: 0 4px 12px rgba(15,23,42,0.05); }
+
+/* Focus ring */
+:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+}
+
+/* Input tweaks */
+input, select, textarea {
+    font-family: inherit;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+
+/* Print — for POS receipts */
+@media print {
+    body * { visibility: hidden; }
+    .print-area, .print-area * { visibility: visible; }
+    .print-area {
+        position: absolute; left: 0; top: 0; width: 100%;
+        padding: 12px; background: #fff !important;
+    }
+    .no-print { display: none !important; }
+}

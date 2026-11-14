@@ -1,0 +1,17 @@
+.git
+.github
+.emergent
+.security-audit
+.wrangler
+**/node_modules
+frontend/build
+**/__pycache__
+**/.env
+**/.env.*
+.dev.vars*
+test_reports
+backend/tests
+scripts
+memory
+*.csv
+*.xlsx

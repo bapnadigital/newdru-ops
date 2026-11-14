@@ -1,0 +1,133 @@
+{
+  "theme": "Light mode primary (Dark mode supported via standard Tailwind 'dark:' classes but optimized for bright retail environments)",
+  "typography": {
+    "fonts": {
+      "headings": "'Outfit', sans-serif",
+      "body": "'IBM Plex Sans', sans-serif",
+      "mono": "'JetBrains Mono', monospace"
+    },
+    "hierarchy": {
+      "h1": "text-3xl sm:text-4xl tracking-tight font-semibold",
+      "h2": "text-2xl sm:text-3xl tracking-tight font-medium",
+      "h3": "text-xl sm:text-2xl tracking-tight font-medium",
+      "h4": "text-lg sm:text-xl font-medium",
+      "body": "text-sm sm:text-base leading-relaxed",
+      "labels": "text-xs font-semibold tracking-[0.2em] uppercase"
+    },
+    "instructions_to_main_agent": "Ensure tight letter spacing for headings. DO NOT use generic fonts like Inter, Roboto, or Open Sans for headings. Maintain a strict size hierarchy. Do not exceed text-5xl anywhere in the app."
+  },
+  "colors": {
+    "palette": {
+      "primary": {
+        "DEFAULT": "#312E81", 
+        "foreground": "#FFFFFF",
+        "light": "#4338CA",
+        "dark": "#1E1B4B"
+      },
+      "accent": {
+        "DEFAULT": "#F59E0B",
+        "foreground": "#FFFFFF",
+        "hover": "#D97706"
+      },
+      "background": {
+        "app": "#F8FAFC",
+        "card": "#FFFFFF",
+        "sidebar": "#1E1B4B"
+      },
+      "text": {
+        "primary": "#0F172A",
+        "secondary": "#475569",
+        "muted": "#94A3B8"
+      },
+      "status": {
+        "success": "#10B981",
+        "warning": "#F59E0B",
+        "danger": "#EF4444",
+        "info": "#3B82F6"
+      },
+      "border": "#E2E8F0"
+    },
+    "instructions_to_main_agent": "Use the custom palette for UI elements. The sidebar should use the dark primary background (#1E1B4B) to ground the app, while the main content area remains light (#F8FAFC) for data legibility. Never use pure #000000 or #808080."
+  },
+  "visual_enhancers": {
+    "shadows": {
+      "card": "shadow-sm",
+      "dropdown": "shadow-lg",
+      "modal": "shadow-xl"
+    },
+    "borders": {
+      "radius": "rounded-md",
+      "style": "border border-slate-200"
+    },
+    "surface_strategies": [
+      {
+        "name": "Dashboard Cards",
+        "classes": "bg-white border border-slate-200 rounded-md shadow-sm transition-shadow hover:shadow-md",
+        "usage": "Use for KPI widgets, inventory tables, and CRM summaries."
+      },
+      {
+        "name": "POS Grid Items",
+        "classes": "bg-white border border-slate-200 rounded-md p-4 flex flex-col items-center justify-center text-center hover:border-primary/50 hover:shadow-sm cursor-pointer transition-all",
+        "usage": "Use for scannable/clickable products in the POS view."
+      },
+      {
+        "name": "Glassmorphism Nav",
+        "classes": "bg-white/70 backdrop-blur-xl backdrop-saturate-150 border-b border-slate-200/50",
+        "usage": "Use for sticky table headers or contextual top navigation bars."
+      }
+    ]
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-indigo-800 text-white hover:bg-indigo-900 rounded-md px-4 py-2 font-medium transition-colors shadow-sm",
+      "accent": "bg-amber-500 text-white hover:bg-amber-600 rounded-md px-4 py-2 font-medium transition-colors shadow-sm",
+      "outline": "border border-slate-300 text-slate-700 bg-transparent hover:bg-slate-50 rounded-md px-4 py-2 font-medium transition-colors",
+      "ghost": "text-slate-600 hover:bg-slate-100 hover:text-slate-900 rounded-md px-4 py-2 font-medium transition-colors"
+    },
+    "tables": {
+      "container": "w-full border-collapse text-sm",
+      "header": "bg-slate-50 text-slate-600 font-medium text-left px-4 py-3 border-b border-slate-200",
+      "row": "border-b border-slate-200 hover:bg-slate-50/50 transition-colors",
+      "cell": "px-4 py-3 text-slate-700"
+    },
+    "forms": {
+      "input": "w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all",
+      "label": "block text-sm font-medium text-slate-700 mb-1"
+    },
+    "instructions_to_main_agent": "Use Shadcn UI for complex interactives (Select, Dialog, Tabs). For basic layouts and POS grids, use raw HTML/Tailwind to maintain the dense, custom look. Override Shadcn's default rounded-xl to rounded-md for a sharper, more professional retail feel."
+  },
+  "layouts": {
+    "dashboard": "grid grid-cols-1 md:grid-cols-[240px_1fr] min-h-screen",
+    "pos": "flex flex-col lg:flex-row h-screen overflow-hidden",
+    "kpi_grid": "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6",
+    "instructions_to_main_agent": "Ensure the sidebar is persistent on desktop. For the POS view, use a split layout: left side for product grid/scanning (2/3 width), right side for the active cart and payment actions (1/3 width). Maximize vertical space for the POS."
+  },
+  "motion": {
+    "transitions": "transition-all duration-200 ease-in-out",
+    "hover_states": "Slight lift (-translate-y-[1px]) and subtle shadow increase for interactive cards.",
+    "instructions_to_main_agent": "Avoid 'transition: all' on elements with transforms. Be purposeful. Use Framer Motion for modal entrances or toast notifications if needed."
+  },
+  "accessibility": {
+    "instructions_to_main_agent": "Ensure high contrast for all text. The POS needs to be fast and readable from a distance. Add `data-testid` to all interactive elements. Support keyboard navigation for the POS (e.g., auto-focusing the barcode scanner input)."
+  },
+  "media": {
+    "image_urls": [
+      {
+        "url": "https://images.unsplash.com/photo-1556740714-a8395b3bf30f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA3MDB8MHwxfHNlYXJjaHwxfHxwb2ludCUyMG9mJTIwc2FsZSUyMHN5c3RlbSUyMHJldGFpbHxrb3wwfHx8fDE3ODUxMjQyNTl8MA&ixlib=rb-4.1.0&q=85",
+        "category": "pos_terminal",
+        "description": "Person holding a smartphone next to a tablet computer (can be used for POS onboarding/hero or dashboard empty states)"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1587293852726-70cdb56c2866?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1NzZ8MHwxfHNlYXJjaHwxfHx3YXJlaG91c2UlMjByZXRhaWwlMjBpbnZlbnRvcnklMjBtYW5hZ2VtZW50fGVufDB8fHx8MTc4NTEyNDI1OXww&ixlib=rb-4.1.0&q=85",
+        "category": "warehouse",
+        "description": "Warehouse shelves with boxes (can be used for inventory dashboard banners or empty states)"
+      }
+    ],
+    "instructions_to_main_agent": "Use these images appropriately if an empty state or onboarding screen requires visual flair. Do not use placeholder text for missing images."
+  },
+  "icons": {
+    "library": "lucide-react",
+    "instructions_to_main_agent": "Use Lucide-React for all icons. Keep stroke width consistent (usually 2). Use informative icons for POS actions (barcode, shopping-cart, credit-card, user-plus)."
+  },
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": "1. Prioritize function over form for this specific app—it's a high-density operational tool. 2. Do not use centered text alignments for tables or forms. 3. Build the specific phase 1 features (Pricing block math, unified inventory grid, POS flow) exactly as requested. 4. Use `data-testid` for all interactive elements. 5. Keep the POS view mobile-friendly and touch-optimized. 6. Avoid 'AI slop' by strictly adhering to the defined color palette and typography scale."
+}
